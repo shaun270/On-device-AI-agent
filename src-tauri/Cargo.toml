@@ -13,6 +13,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["macos-private-api"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+tauri              = { version = "2", features = ["macos-private-api"] }
+serde              = { version = "1", features = ["derive"] }
+serde_json         = "1"
+# tokio: needed for async sleep in echo_message (and future async AI calls)
+tokio              = { version = "1", features = ["time"] }
+# Global hotkey plugin — registers Alt+M at OS level
+tauri-plugin-global-shortcut = "2"
