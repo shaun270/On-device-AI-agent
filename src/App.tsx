@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import "./App.css";
+import { APP_NAME, APP_PLACEHOLDER } from "./constants";
 
 function App() {
   const [input, setInput] = useState("");
@@ -16,7 +17,7 @@ function App() {
   return (
     <div className="bar" data-tauri-drag-region>
       <header className="brand" data-tauri-drag-region>
-        <span className="brand-mark">Martha</span>
+        <span className="brand-mark" data-tauri-drag-region>{APP_NAME}</span>
       </header>
 
       <form className="input-row" onSubmit={handleSubmit}>
@@ -24,8 +25,8 @@ function App() {
           type="text"
           value={input}
           onChange={(e) => setInput(e.currentTarget.value)}
-          placeholder="Ask Martha…"
-          aria-label="Ask Martha"
+          placeholder={APP_PLACEHOLDER}
+          aria-label={`Ask ${APP_NAME}`}
           autoFocus
         />
         <button type="submit">Send</button>
