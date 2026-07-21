@@ -41,22 +41,25 @@ export default function App() {
 
   useKeyboard({ inputValue: input, onClearInput: () => setInput(""), onHideWindow: handleEsc });
 
-  async function handleSend(text: string) {
-    setInput("");
-    setShowSessions(false);
-    addMessage("user", text);
-    setStatus("thinking");
-    try {
-      const reply = await invoke<string>("echo_message", { message: text });
-      addMessage("assistant", reply);
-      setStatus("idle");
-    } catch (err) {
-      console.error("invoke error:", err);
-      addMessage("assistant", "⚠ Something went wrong. Please try again.");
-      setStatus("error");
-      setTimeout(() => setStatus("idle"), 2000);
+    async function handleSend(text: string) {
+      setInput("");
+      setShowSessions(false);
+      addMessage("user", text);
+      setStatus("thinking");
+      try {
+        const reply = await invoke<string>("generate_response", { 
+            message: text,
+            agentName: settings.agentName
+        });
+        addMessage("assistant", reply);
+        setStatus("idle");
+      } catch (err) {
+        console.error("invoke error:", err);
+        addMessage("assistant", `⚠ Error: ${err}`);
+        setStatus("error");
+        setTimeout(() => setStatus("idle"), 2000);
+      }
     }
-  }
 
   function handleNewChat() {
     newSession();
