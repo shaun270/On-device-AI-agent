@@ -45,14 +45,79 @@ export default function App() {
     setInput("");
     setShowSessions(false);
     addMessage("user", text);
+
+    const trimmed = text.trim();
+
+    // Instant clarifying replies — no wait, so no dots.
+    if (/^\/done\b/i.test(trimmed) && !trimmed.replace(/^\/done\b/i, "").trim()) {
+      addMessage("assistant", "Which reminder should I check off? e.g. /done Buy milk");
+      setStatus("idle");
+      return;
+    }
+    if (/^\/remind\b/i.test(trimmed) && !trimmed.replace(/^\/remind\b/i, "").trim()) {
+      addMessage("assistant", "What should I remind you about? e.g. /remind Buy milk");
+      setStatus("idle");
+      return;
+    }
+
+    // Show … only while we're waiting for a reply; cleared the moment we have one.
     setStatus("thinking");
+
     try {
-      const reply = await invoke<string>("echo_message", { message: text });
+      // Temporary slash commands until Claude tool-calling is wired.
+      let reply: string;
+      const listMatch = trimmed.match(
+        /^\/reminders(?:\s+(all|today|week|\d+|search\s+.+))?$/i,
+      );
+      if (listMatch) {
+        const arg = (listMatch[1] || "all").trim();
+        if (/^\d+$/.test(arg)) {
+          reply = await invoke<string>("list_reminders", {
+            days_ahead: Number(arg),
+            limit: 25,
+          });
+        } else if (/^search\s+/i.test(arg)) {
+          reply = await invoke<string>("list_reminders", {
+            search: arg.replace(/^search\s+/i, "").trim(),
+            limit: 25,
+          });
+        } else {
+          reply = await invoke<string>("list_reminders", {
+            range: arg.toLowerCase(),
+            limit: 25,
+          });
+        }
+      } else if (/^\/done\b/i.test(trimmed)) {
+        const rest = trimmed.replace(/^\/done\b/i, "").trim();
+        const [titlePart, matchPart] = rest.split("|").map((s) => s.trim());
+        reply = await invoke<string>("complete_reminder", {
+          title: titlePart,
+          match_mode: matchPart || "exact",
+        });
+      } else if (/^\/remind\b/i.test(trimmed)) {
+        const rest = trimmed.replace(/^\/remind\b/i, "").trim();
+        const [titlePart, timePart] = rest.split("|").map((s) => s.trim());
+        reply = await invoke<string>("set_reminder", {
+          title: titlePart,
+          due: timePart || null,
+        });
+      } else {
+        reply =
+          "No agent wired yet. Use /remind, /reminders, or /done — or wait for the new agent code.";
+      }
       addMessage("assistant", reply);
       setStatus("idle");
     } catch (err) {
       console.error("invoke error:", err);
-      addMessage("assistant", "⚠ Something went wrong. Please try again.");
+      let message = "⚠ Something went wrong. Please try again.";
+      if (typeof err === "string") {
+        message = err;
+      } else if (err instanceof Error) {
+        message = err.message;
+      } else if (err && typeof err === "object" && "message" in err) {
+        message = String((err as { message: unknown }).message);
+      }
+      addMessage("assistant", message);
       setStatus("error");
       setTimeout(() => setStatus("idle"), 2000);
     }
