@@ -2,8 +2,12 @@
 //!
 //! To add a new feature (alarms, music, files, …):
 //! 1. Create `capabilities/<name>/` with the same shape as `reminders/`
+//!    (tools + `commands.rs` + optional `router.rs` + `system.rs`)
 //! 2. Add `pub mod <name>;` here
 //! 3. Append that module's tools in `all_tools()`
+//! 4. Register that module's Tauri commands in `lib.rs` (one line each)
+//!
+//! Do not put feature prompts or OS logic in `lib.rs` or `llm.rs`.
 
 pub mod reminders;
 

@@ -50,12 +50,15 @@ You need the standard Tauri prerequisites installed on your system:
   - **`components/`**: Modular UI pieces (BrandBar, InputArea, ChatLog, SessionDrawer, SettingsPanel).
   - **`hooks/`**: Business logic separated from the UI (`useChatSessions`, `useWindowControls`, `useSettings`).
 - **`src-tauri/`**: Contains the Rust backend.
-  - **`src/lib.rs`**: Entry point for Tauri. Handles native window interactions and the placeholder `echo_message` command for AI responses.
+  - **`src/lib.rs`**: Entry point for Tauri. Manages the embedded LLM engine state and the `generate_response` command.
+  - **`src/llm.rs`**: The inference engine powered by `llama-cpp-2`. It automatically loads the downloaded `.gguf` model into the GPU (Metal on Mac) and processes ChatML formatted prompts.
   - **`capabilities/default.json`**: Security policy dictating what OS-level features the frontend is allowed to use.
 
-## 🔮 Next Steps for Developers
+## 🧠 Local AI Brain (Qwen2.5-3B-Coder)
 
-To wire up a real LLM (like OpenAI or Anthropic):
-1. Open `src-tauri/src/lib.rs`.
-2. Locate the `echo_message` command.
-3. Replace the `tokio::time::sleep` mock with a real HTTP request to your preferred AI provider.
+Martha now runs **100% offline** on your device using a locally embedded Large Language Model.
+
+### How it works:
+1. **Auto-Download**: When you run the app for the very first time, a background process will securely download the `qwen2.5-3b-coder-q4_k_m.gguf` model (~2.2GB) directly from HuggingFace to your local application data folder (`~/Library/Application Support/com.hey-martha.dev/models/`).
+2. **GPU Acceleration**: The Rust backend uses `llama-cpp-2` with Metal acceleration to load the model entirely into your Mac's GPU memory, allowing for extremely fast, private inference.
+3. **No External Servers**: There are no API keys required and absolutely zero data is sent to the internet during conversations.

@@ -46,7 +46,9 @@ pub fn list_query_from_json(input: &serde_json::Value) -> Result<ListQuery, Stri
 
     let start_iso = input.get("start").and_then(|v| v.as_str()).map(str::trim);
     let end_iso = input.get("end").and_then(|v| v.as_str()).map(str::trim);
-    let days_ahead = input.get("days_ahead").and_then(|v| v.as_u64()).map(|n| n as u32);
+    let days_ahead = input.get("days_ahead").and_then(|v| {
+        v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse::<u64>().ok()))
+    }).map(|n| n as u32);
     let range = input
         .get("range")
         .and_then(|v| v.as_str())
@@ -92,6 +94,13 @@ pub fn list_query_from_json(input: &serde_json::Value) -> Result<ListQuery, Stri
                     Some(ymd_ord(end.0, end.1, end.2)),
                     true,
                 )
+            }
+            Some("tomorrow") => {
+                let tomorrow = ymd_plus_days(today.0, today.1, today.2, 1)?;
+                let day_after = ymd_plus_days(today.0, today.1, today.2, 2)?;
+                let start_ord = ymd_ord(tomorrow.0, tomorrow.1, tomorrow.2);
+                let end_ord = ymd_ord(day_after.0, day_after.1, day_after.2);
+                (Some(start_ord), Some(end_ord), true)
             }
             Some("all") | Some("everything") | None => (None, None, false),
             Some(other) => {

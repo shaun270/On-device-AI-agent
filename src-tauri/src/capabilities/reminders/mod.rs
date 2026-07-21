@@ -1,7 +1,9 @@
-//! Reminders capability — tools + EventKit system layer.
+//! Reminders capability — tools + EventKit + Tauri commands + intent router.
 //!
 //! Layout (copy this for new features):
-//!   mod.rs              — exports tools()
+//!   mod.rs              — exports tools() + re-exports commands
+//!   commands.rs         — Tauri commands (register from lib.rs)
+//!   router.rs           — feature-owned LLM prompt for intent JSON
 //!   system.rs           — OS/EventKit only
 //!   set_reminder.rs     — one tool file
 //!   list_reminders.rs
@@ -10,6 +12,8 @@
 mod complete_reminder;
 mod list_reminders;
 mod set_reminder;
+pub mod commands;
+pub mod router;
 pub mod system;
 
 use crate::shared::Tool;
