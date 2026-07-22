@@ -22,6 +22,7 @@ export default function App() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showSessions, setShowSessions] = useState(false);
+  const [toolStatus, setToolStatus] = useState<string | null>(null);
 
   const {
     sessions, activeSession, activeSessionId,
@@ -44,21 +45,45 @@ export default function App() {
     async function handleSend(text: string) {
       setInput("");
       setShowSessions(false);
+      
+      // Calculate history before adding to state to avoid race conditions
+      const history = [...activeSession.messages, { role: "user", content: text }];
       addMessage("user", text);
       setStatus("thinking");
-      try {
-        const reply = await invoke<string>("generate_response", { 
-            message: text,
-            agentName: settings.agentName
-        });
-        addMessage("assistant", reply);
-        setStatus("idle");
-      } catch (err) {
-        console.error("invoke error:", err);
-        addMessage("assistant", `⚠ Error: ${err}`);
-        setStatus("error");
-        setTimeout(() => setStatus("idle"), 2000);
-      }
+      
+      import("@tauri-apps/api/event").then(({ listen }) => {
+          const unlistenStatus = listen<string>("tool-status", (event) => {
+              if (event.payload === "Done.") {
+                  setToolStatus(null);
+              } else {
+                  setToolStatus(event.payload);
+              }
+          });
+          
+          const unlistenWrite = listen<string>("write-approval-request", async (event) => {
+              const approved = window.confirm(`Martha wants to create or modify the following file:\n\n${event.payload}\n\nDo you want to allow this?`);
+              await invoke("approve_write", { approved });
+          });
+          
+          invoke<string>("generate_response", { 
+              history: history,
+              agentName: settings.agentName
+          }).then(reply => {
+              addMessage("assistant", reply);
+              setStatus("idle");
+              setToolStatus(null);
+              unlistenStatus.then(f => f());
+              unlistenWrite.then(f => f());
+          }).catch(err => {
+              console.error("invoke error:", err);
+              addMessage("assistant", `⚠ Error: ${err}`);
+              setStatus("error");
+              setToolStatus(null);
+              setTimeout(() => setStatus("idle"), 2000);
+              unlistenStatus.then(f => f());
+              unlistenWrite.then(f => f());
+          });
+      });
     }
 
   function handleNewChat() {
@@ -121,6 +146,7 @@ export default function App() {
               <InputArea
                 value={input}
                 status={status}
+                toolStatus={toolStatus}
                 agentName={settings.agentName}
                 onChange={setInput}
                 onSubmit={handleSend}

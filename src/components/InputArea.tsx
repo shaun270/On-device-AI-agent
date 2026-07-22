@@ -15,12 +15,13 @@ import type { AppStatus } from "../types";
 interface Props {
   value: string;
   status: AppStatus;
+  toolStatus?: string | null;
   agentName: string;
   onChange: (value: string) => void;
   onSubmit: (value: string) => void;
 }
 
-export function InputArea({ value, status, agentName, onChange, onSubmit }: Props) {
+export function InputArea({ value, status, toolStatus, agentName, onChange, onSubmit }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isThinking = status === "thinking";
 
@@ -46,19 +47,28 @@ export function InputArea({ value, status, agentName, onChange, onSubmit }: Prop
   }
 
   return (
-    <form
-      className="input-area"
-      onSubmit={(e) => {
-        e.preventDefault();
-        handleSubmit();
-      }}
-    >
-      <textarea
-        ref={textareaRef}
-        className="input-textarea"
-        value={value}
-        rows={1}
-        placeholder={`Message ${agentName}…`}
+    <div className="input-area-container">
+      {toolStatus && (
+        <div className="tool-status-bubble">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="spin" style={{marginRight: 6}}>
+            <path d="M12 4V2A10 10 0 002 12h2a8 8 0 018-8z" />
+          </svg>
+          {toolStatus}
+        </div>
+      )}
+      <form
+        className="input-area"
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSubmit();
+        }}
+      >
+        <textarea
+          ref={textareaRef}
+          className="input-textarea"
+          value={value}
+          rows={1}
+          placeholder={`Message ${agentName}…`}
         aria-label="Message input"
         disabled={isThinking}
         onChange={(e) => onChange(e.currentTarget.value)}
@@ -84,6 +94,7 @@ export function InputArea({ value, status, agentName, onChange, onSubmit }: Prop
           </svg>
         )}
       </button>
-    </form>
+      </form>
+    </div>
   );
 }
