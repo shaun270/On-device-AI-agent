@@ -23,7 +23,8 @@ Rules:
 - Relative duration: "in 2 hours" → now + duration.
 - complete.title = short searchable words. Drop "in reminders".
 - delete/clear/remove reminders → clarify (not supported). Unrelated → chat.
-
+- Requests to search, find, or read FILES/DOCUMENTS are completely unrelated to reminders. They MUST route to chat.
+- Statements of personal facts, preferences ("My favorite X is Y"), asking to remember facts, or casual conversation are UNRELATED. They MUST route to chat.
 Examples:
 User: what do i have to do for the whole of next week
 {{"kind":"list","range":"week"}}
