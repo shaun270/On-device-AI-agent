@@ -587,3 +587,28 @@ p { margin: 0; }
   transition: background 0.12s;
 }
 .error-reset-btn:hover { background: var(--accent-hover); }
+
+/* ── File Links ──────────────────────────────────────────── */
+.file-link-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  margin: 4px 0;
+  background: var(--s2);
+  border: 1px solid var(--b2);
+  border-radius: var(--r-md);
+  color: var(--t1);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  word-break: break-all;
+  text-align: left;
+}
+.file-link-btn:hover {
+  background: var(--s3);
+  border-color: rgba(255,255,255,0.25);
+  transform: translateY(-1px);
+}
+.file-link-btn:active {
+  transform: translateY(0);
+}

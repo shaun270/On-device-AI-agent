@@ -65,6 +65,7 @@ pub fn run() {
             // shared shell
             commands::chat::generate_response,
             commands::chat::approve_write,
+            commands::file::open_file,
             commands::quit::quit_app,
             commands::hotkey::update_hotkey,
         ])
