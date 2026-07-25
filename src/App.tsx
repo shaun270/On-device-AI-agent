@@ -5,6 +5,10 @@ import { useChatSessions } from "./hooks/useChatSessions";
 import { useSettings } from "./hooks/useSettings";
 import { useWindowControls } from "./hooks/useWindowControls";
 import { useKeyboard } from "./hooks/useKeyboard";
+import {
+  peekReminderEarlyClarify,
+  tryHandleReminderMessage,
+} from "./features/reminders";
 
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { BrandBar } from "./components/BrandBar";
@@ -42,49 +46,76 @@ export default function App() {
 
   useKeyboard({ inputValue: input, onClearInput: () => setInput(""), onHideWindow: handleEsc });
 
-    async function handleSend(text: string) {
-      setInput("");
-      setShowSessions(false);
-      
-      // Calculate history before adding to state to avoid race conditions
-      const history = [...activeSession.messages, { role: "user", content: text }];
-      addMessage("user", text);
-      setStatus("thinking");
-      
-      import("@tauri-apps/api/event").then(({ listen }) => {
-          const unlistenStatus = listen<string>("tool-status", (event) => {
-              if (event.payload === "Done.") {
-                  setToolStatus(null);
-              } else {
-                  setToolStatus(event.payload);
-              }
-          });
-          
-          const unlistenWrite = listen<string>("write-approval-request", async (event) => {
-              const approved = window.confirm(`Martha wants to create or modify the following file:\n\n${event.payload}\n\nDo you want to allow this?`);
-              await invoke("approve_write", { approved });
-          });
-          
-          invoke<string>("generate_response", { 
-              history: history,
-              agentName: settings.agentName
-          }).then(reply => {
-              addMessage("assistant", reply);
-              setStatus("idle");
-              setToolStatus(null);
-              unlistenStatus.then(f => f());
-              unlistenWrite.then(f => f());
-          }).catch(err => {
-              console.error("invoke error:", err);
-              addMessage("assistant", `⚠ Error: ${err}`);
-              setStatus("error");
-              setToolStatus(null);
-              setTimeout(() => setStatus("idle"), 2000);
-              unlistenStatus.then(f => f());
-              unlistenWrite.then(f => f());
-          });
-      });
+
+  async function handleSend(text: string) {
+    setInput("");
+    setShowSessions(false);
+
+    // Calculate history before adding to state to avoid race conditions
+    const history = [...activeSession.messages, { role: "user", content: text }];
+    addMessage("user", text);
+
+    const trimmed = text.trim();
+    const early = peekReminderEarlyClarify(trimmed);
+    if (early) {
+      addMessage("assistant", early);
+      setStatus("idle");
+      return;
     }
+
+    setStatus("thinking");
+
+    try {
+      const reminderReply = await tryHandleReminderMessage(trimmed);
+      if (reminderReply !== null) {
+        addMessage("assistant", reminderReply);
+        setStatus("idle");
+        return;
+      }
+      
+      // Fallback to chat model with tools
+      const { listen } = await import("@tauri-apps/api/event");
+      
+      const unlistenStatus = await listen<string>("tool-status", (event) => {
+          if (event.payload === "Done.") {
+              setToolStatus(null);
+          } else {
+              setToolStatus(event.payload);
+          }
+      });
+      
+      const unlistenWrite = await listen<string>("write-approval-request", async (event) => {
+          const approved = window.confirm(`Martha wants to create or modify the following file:\n\n${event.payload}\n\nDo you want to allow this?`);
+          await invoke("approve_write", { approved });
+      });
+      
+      const reply = await invoke<string>("generate_response", { 
+          history: history,
+          agentName: settings.agentName
+      });
+      
+      addMessage("assistant", reply);
+      setStatus("idle");
+      setToolStatus(null);
+      unlistenStatus();
+      unlistenWrite();
+      
+    } catch (err) {
+      console.error("invoke error:", err);
+      let message = "⚠ Something went wrong. Please try again.";
+      if (typeof err === "string") {
+        message = err;
+      } else if (err instanceof Error) {
+        message = err.message;
+      } else if (err && typeof err === "object" && "message" in err) {
+        message = String((err as { message: unknown }).message);
+      }
+      addMessage("assistant", message);
+      setStatus("error");
+      setToolStatus(null);
+      setTimeout(() => setStatus("idle"), 2000);
+    }
+  }
 
   function handleNewChat() {
     newSession();
@@ -96,7 +127,6 @@ export default function App() {
   return (
     <ErrorBoundary>
       <div className="app-shell">
-        {/* Session drawer (slides in from left) */}
         {showSessions && (
           <SessionDrawer
             sessions={sessions}
@@ -108,7 +138,6 @@ export default function App() {
           />
         )}
 
-        {/* Settings overlay */}
         {showSettings && (
           <SettingsPanel
             settings={settings}
@@ -118,7 +147,6 @@ export default function App() {
           />
         )}
 
-        {/* Main window */}
         <div className="bar" data-tauri-drag-region>
           <BrandBar
             agentName={settings.agentName}

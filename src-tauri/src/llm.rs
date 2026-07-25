@@ -23,7 +23,13 @@ impl LlamaEngine {
         Ok(Self { backend, model })
     }
 
-    pub fn generate(&self, history: &[crate::ChatMessage], agent_name: &str) -> Result<String, String> {
+    pub fn generate(
+        &self,
+        prompt_or_history: crate::shared::PromptOrHistory<'_>,
+        agent_name: &str,
+        custom_system: Option<String>,
+        max_tokens: Option<usize>,
+    ) -> Result<String, String> {
         // Simple synchronous generation for now (we can make it async/streaming later)
         let ctx_params = LlamaContextParams::default()
             .with_n_ctx(std::num::NonZeroU32::new(4096))
@@ -32,13 +38,33 @@ impl LlamaEngine {
         let mut ctx = self.model.new_context(&self.backend, ctx_params)
             .map_err(|e| format!("Failed to create context: {}", e))?;
             
-        let memory_context = match crate::tools::read_memory() {
-            Ok(mem) => format!("\n# Memory\n{}", mem),
-            Err(_) => String::new(),
-        };
+        let mut formatted_prompt = String::new();
         
-        let mut formatted_prompt = format!(
-            "<|im_start|>system\nYou are {agent_name}, an AI assistant. You operate STRICTLY in JSON mode. 
+        if let Some(system_msg) = custom_system {
+            // Reminders Intent Classifier Mode
+            let prompt = match prompt_or_history {
+                crate::shared::PromptOrHistory::Prompt(p) => p,
+                _ => return Err("Expected prompt for classifier".to_string()),
+            };
+            formatted_prompt = format!(
+                "<|im_start|>system\n{}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+                system_msg,
+                prompt
+            );
+        } else {
+            // Strict JSON Chat Mode
+            let history = match prompt_or_history {
+                crate::shared::PromptOrHistory::History(h) => h,
+                _ => return Err("Expected history for chat".to_string()),
+            };
+            
+            let memory_context = match crate::tools::read_memory() {
+                Ok(mem) => format!("\n# Memory\n{}", mem),
+                Err(_) => String::new(),
+            };
+            
+            formatted_prompt = format!(
+                "<|im_start|>system\nYou are {agent_name}, an AI assistant. You operate STRICTLY in JSON mode. 
 IMPORTANT: The following memory block contains facts about the USER, NOT about you. Your name is {agent_name}.{memory_context}
 
 You have the following tools available:
@@ -62,12 +88,12 @@ EXAMPLE RESPONSES:
 {{\"name\": \"search_files\", \"arguments\": {{\"query\": \"resume\"}}}}
 {{\"name\": \"read_file\", \"arguments\": {{\"path\": \"/Users/admin/resume.pdf\"}}}}
 {{\"name\": \"reply\", \"arguments\": {{\"message\": \"The file contains ...\"}}}}<|im_end|>\n",
-            agent_name = agent_name,
-            memory_context = memory_context
-        );
+                agent_name = agent_name,
+                memory_context = memory_context
+            );
 
-        // Conversation Priming (Few-Shot injection)
-        let priming = "\
+            // Conversation Priming (Few-Shot injection)
+            let priming = "\
 <|im_start|>user
 Find package.json and read it.<|im_end|>
 <|im_start|>assistant
@@ -81,22 +107,23 @@ Tool Result: {\"version\": \"1.0.0\"}<|im_end|>
 <|im_start|>assistant
 {\"name\": \"reply\", \"arguments\": {\"message\": \"I found the file at /absolute/path/to/package.json and it says version 1.0.0.\"}}<|im_end|>
 ";
-        formatted_prompt.push_str(priming);
-        
-        for msg in history {
-            let role = if msg.role == "user" { "user" } else { "assistant" };
-            formatted_prompt.push_str(&format!("<|im_start|>{}\n{}<|im_end|>\n", role, msg.content));
+            formatted_prompt.push_str(priming);
+            
+            for msg in history {
+                let role = if msg.role == "user" { "user" } else { "assistant" };
+                formatted_prompt.push_str(&format!("<|im_start|>{}\n{}<|im_end|>\n", role, msg.content));
+            }
+            formatted_prompt.push_str("<|im_start|>assistant\n{");
         }
-        formatted_prompt.push_str("<|im_start|>assistant\n{");
             
         // Tokenize prompt
         let tokens = self.model.str_to_token(&formatted_prompt, llama_cpp_2::model::AddBos::Always)
             .map_err(|e| format!("Failed to tokenize: {}", e))?;
             
         let max_context = 4096;
-        let max_response = 512;
+        let limit = max_tokens.unwrap_or(512).clamp(16, 512);
         
-        if tokens.len() > (max_context - max_response) {
+        if tokens.len() > (max_context - limit) {
             return Err("Context window full. Please clear chat history or start a New Chat.".to_string());
         }
         
@@ -122,8 +149,7 @@ Tool Result: {\"version\": \"1.0.0\"}<|im_end|>
         let mut response = String::new();
         let mut n_cur = tokens.len() as i32;
         
-        // Very basic sampling loop (max 512 tokens)
-        for _ in 0..512 {
+        for _ in 0..limit {
             let mut candidates = ctx.candidates_ith(batch.n_tokens() - 1);
             let mut candidates_p = LlamaTokenDataArray::from_iter(candidates, false);
             

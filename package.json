@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test:reminders": "npx --yes esbuild scripts/run-reminder-tests.ts --bundle --platform=node --format=esm --outfile=/tmp/martha-reminder-tests.mjs --alias:@tauri-apps/api/core=./scripts/mock-tauri-core.ts && node /tmp/martha-reminder-tests.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
