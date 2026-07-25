@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSRemindersUsageDescription</key>
+	<string>Martha needs access to your reminders to create, list, and complete them when you ask.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Martha needs full access to your reminders to create, list, and complete them when you ask.</string>
+</dict>
+</plist>

@@ -4,7 +4,7 @@
  * - <textarea> grows up to 4 lines as you type
  * - Enter → submit message
  * - Shift+Enter → insert a newline (multi-line input)
- * - Disabled while Martha is thinking
+ * - Stays usable while Martha is thinking (dots live in ChatLog only)
  *
  * Note: Esc is handled globally in useKeyboard, not here.
  */
@@ -15,14 +15,14 @@ import type { AppStatus } from "../types";
 interface Props {
   value: string;
   status: AppStatus;
+  toolStatus?: string | null;
   agentName: string;
   onChange: (value: string) => void;
   onSubmit: (value: string) => void;
 }
 
-export function InputArea({ value, status, agentName, onChange, onSubmit }: Props) {
+export function InputArea({ value, status: _status, toolStatus, agentName, onChange, onSubmit }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const isThinking = status === "thinking";
 
   // Auto-resize: grow the textarea to fit content, max ~4 lines.
   useEffect(() => {
@@ -41,26 +41,34 @@ export function InputArea({ value, status, agentName, onChange, onSubmit }: Prop
 
   function handleSubmit() {
     const trimmed = value.trim();
-    if (!trimmed || isThinking) return;
+    if (!trimmed) return;
     onSubmit(trimmed);
   }
 
   return (
-    <form
-      className="input-area"
-      onSubmit={(e) => {
-        e.preventDefault();
-        handleSubmit();
-      }}
-    >
-      <textarea
-        ref={textareaRef}
-        className="input-textarea"
-        value={value}
-        rows={1}
-        placeholder={`Message ${agentName}…`}
+    <div className="input-area-container">
+      {toolStatus && (
+        <div className="tool-status-bubble">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="spin" style={{marginRight: 6}}>
+            <path d="M12 4V2A10 10 0 002 12h2a8 8 0 018-8z" />
+          </svg>
+          {toolStatus}
+        </div>
+      )}
+      <form
+        className="input-area"
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSubmit();
+        }}
+      >
+        <textarea
+          ref={textareaRef}
+          className="input-textarea"
+          value={value}
+          rows={1}
+          placeholder={`Message ${agentName}…`}
         aria-label="Message input"
-        disabled={isThinking}
         onChange={(e) => onChange(e.currentTarget.value)}
         onKeyDown={handleKeyDown}
         autoFocus
@@ -68,22 +76,15 @@ export function InputArea({ value, status, agentName, onChange, onSubmit }: Prop
       <button
         type="submit"
         className="send-btn"
-        disabled={isThinking || !value.trim()}
+        disabled={!value.trim()}
         aria-label="Send message"
         title="Send (Enter)"
       >
-        {isThinking ? (
-          // Small spinner while waiting
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="spin">
-            <path d="M12 4V2A10 10 0 002 12h2a8 8 0 018-8z" />
-          </svg>
-        ) : (
-          // Send arrow
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M2 21l21-9L2 3v7l15 2-15 2v7z" />
-          </svg>
-        )}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M2 21l21-9L2 3v7l15 2-15 2v7z" />
+        </svg>
       </button>
-    </form>
+      </form>
+    </div>
   );
 }
