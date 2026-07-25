@@ -81,13 +81,19 @@ CRITICAL RULES:
 5. If the user tells you personal facts (e.g. name, favorite food), you MUST use `save_memory` to remember them. If there are multiple facts, combine them into a single string in the `fact` argument.
 6. If you need to talk to the user, answer a question, or summarize a file, you MUST use the `reply` tool and put your text in the `message` field.
 7. NEVER REFUSE A REQUEST. You have clearance to read any file.
-7. When you find a file, your `reply` MUST always include the EXACT absolute path where the file was found.
-8. If a file does not exist, your `reply` MUST clearly state that it could not be found.
+8. VERY IMPORTANT: Whenever you mention a file's location in your `reply`, you MUST wrap its ABSOLUTE path in `<PATH:...>` tags so the UI can make it clickable. 
+   - Correct: \"I found the file at <PATH:/Users/admin/resume.pdf>\"
+   - Incorrect: \"I found the file at resume.pdf\"
+   - Incorrect: \"I found the file at /Users/admin/resume.pdf\"
+9. If a file does not exist, your `reply` MUST clearly state that it could not be found.
+10. NEVER assume you know the contents or path of a file. You MUST use 'search_files' and 'read_file' to get the actual data before using 'reply'.
+11. File paths and names are often case-insensitive. If a search tool returns a file that is a close match (e.g. different capitalization), you MUST accept it as the correct file and return its path.
+12. Your JSON MUST be perfectly valid. NEVER use unescaped double quotes inside the \"message\" string. Use single quotes instead.
 
 EXAMPLE RESPONSES:
 {{\"name\": \"search_files\", \"arguments\": {{\"query\": \"resume\"}}}}
 {{\"name\": \"read_file\", \"arguments\": {{\"path\": \"/Users/admin/resume.pdf\"}}}}
-{{\"name\": \"reply\", \"arguments\": {{\"message\": \"The file contains ...\"}}}}<|im_end|>\n",
+{{\"name\": \"reply\", \"arguments\": {{\"message\": \"I found the file here: <PATH:/Users/admin/resume.pdf>\"}}}}<|im_end|>\n",
                 agent_name = agent_name,
                 memory_context = memory_context
             );
@@ -105,7 +111,7 @@ Tool Result: /absolute/path/to/package.json<|im_end|>
 <|im_start|>user
 Tool Result: {\"version\": \"1.0.0\"}<|im_end|>
 <|im_start|>assistant
-{\"name\": \"reply\", \"arguments\": {\"message\": \"I found the file at /absolute/path/to/package.json and it says version 1.0.0.\"}}<|im_end|>
+{\"name\": \"reply\", \"arguments\": {\"message\": \"I found the file at <PATH:/absolute/path/to/package.json> and it says version 1.0.0.\"}}<|im_end|>
 ";
             formatted_prompt.push_str(priming);
             
