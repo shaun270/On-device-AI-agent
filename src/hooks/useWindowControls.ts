@@ -26,6 +26,20 @@ export function useWindowControls(settings: AppSettings) {
     getCurrentWindow().setAlwaysOnTop(settings.alwaysOnTop).catch(console.error);
   }, [settings.alwaysOnTop]);
 
+  // This window is alwaysOnTop + borderless + transparent, which on macOS
+  // becomes a floating-level window — those have slower/less reliable
+  // click-to-activate than a normal window, especially when the window
+  // underneath the click (another app, e.g. a terminal) is itself already
+  // focused. Don't wait on the OS's own activation handoff: explicitly grab
+  // window focus the instant any click lands anywhere in the app.
+  useEffect(() => {
+    const grabFocus = () => {
+      getCurrentWindow().setFocus().catch(console.error);
+    };
+    document.addEventListener("mousedown", grabFocus);
+    return () => document.removeEventListener("mousedown", grabFocus);
+  }, []);
+
   // Global Hotkey registration (Toggle window state)
   useEffect(() => {
     if (!settings.globalHotkey) return;
