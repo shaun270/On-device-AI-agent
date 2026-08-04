@@ -129,7 +129,7 @@ pub async fn classify_intent(
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
     let system_prompt = router::system_prompt(&current_date);
-    let res = llm_access::generate(&state, crate::shared::PromptOrHistory::Prompt(&text), "Router", Some(system_prompt), Some(128)).await?;
+    let res = llm_access::generate(&state, crate::shared::PromptOrHistory::Prompt(&text), "Router", Some(system_prompt), Some(128), &current_date).await?;
     let cleaned = router::extract_json_object(&res).unwrap_or_else(|| {
         res.replace("```json", "").replace("```", "").trim().to_string()
     });

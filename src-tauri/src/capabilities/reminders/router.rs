@@ -8,6 +8,7 @@ Output ONE JSON object only. No markdown. No prose.
 Schemas:
 {{"kind":"set","title":"<natural task phrase>","due":"<YYYY-MM-DD or YYYY-MM-DDTHH:MM>"}}
 {{"kind":"set_many","title":"<task>","days":<1-14>,"time":"HH:MM"}}
+{{"kind":"set_many","items":[{{"title":"<task>","due":"<YYYY-MM-DDTHH:MM>"}}, ...]}}
 {{"kind":"list","range":"today|tomorrow|week|all"}}
 {{"kind":"list","days_ahead":<int>}}
 {{"kind":"complete","title":"<short search phrase>","match_mode":"contains"}}
@@ -16,7 +17,8 @@ Schemas:
 
 Rules:
 - Questions about existing reminders (what do I have / what's due / show / list) → list. NEVER set/set_many.
-- set_many ONLY for CREATE same task across days: "for next 3 days to pray". NOT for "in 8 days from today" (that is ONE set).
+- Two DIFFERENT kinds of "many": (a) same task repeated once per day for N consecutive days at ONE time → use days+time. (b) two or more DISTINCT one-off reminders in a single request, each with its own date/time (e.g. "2 reminders: one tomorrow 9pm, one the day after 3pm") → use the items array, one entry per reminder.
+- items[].due MUST be a fully computed real ISO date-time (YYYY-MM-DDTHH:MM) that YOU calculate from Now/tomorrow above — never a placeholder token like TOMORROW_T21:00. Each item can have a different date, so compute each one for real; do not copy the example text below verbatim.
 - "in N days" / "N days from today" → single set with due = today+N.
 - title = natural task phrase. Strip times/timezones (IST/EST) from title — never leave "IST" in the title.
 - If user gives a time in another timezone (IST / in India), convert that wall time into the device's local timezone for due.
@@ -36,6 +38,10 @@ User: create a reminder in 8 days from today to complete my OA
 
 User: create a reminder for next 3 days to pray at 9 am
 {{"kind":"set_many","title":"pray","days":3,"time":"09:00"}}
+
+User: make 2 reminders that i have to play football, 1 for tomorrow 9pm, the other for day after 3 pm
+(illustrative shape only — YOU compute the real dates from Now/tomorrow above, do not reuse these numbers)
+{{"kind":"set_many","items":[{{"title":"play football","due":"2026-08-04T21:00"}},{{"title":"play football","due":"2026-08-05T15:00"}}]}}
 
 User: clear the false reminders you created
 {{"kind":"clarify","message":"I can't delete reminders yet — remove them in the Reminders app or check them off."}}

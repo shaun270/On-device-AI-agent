@@ -1,0 +1,94 @@
+# Router exemplars for the "files" domain. Same shape as
+# capabilities/reminders/exemplars.toml — see that file for the format.
+
+[[domain_exemplar]]
+text = "find my resume"
+
+[[domain_exemplar]]
+text = "search for the budget spreadsheet"
+
+[[domain_exemplar]]
+text = "can you locate my tax documents"
+
+[[domain_exemplar]]
+text = "read the contents of that pdf"
+
+[[domain_exemplar]]
+text = "open and summarize this file"
+
+[[domain_exemplar]]
+text = "what does my resume say"
+
+[[domain_exemplar]]
+text = "write this text to a new file"
+
+[[domain_exemplar]]
+text = "save this summary to a file called notes.txt"
+
+[[domain_exemplar]]
+text = "create a text file with this content"
+
+[[domain_exemplar]]
+text = "look for a file named invoice"
+
+[[domain_exemplar]]
+text = "find the presentation I made last week"
+
+[[domain_exemplar]]
+text = "read my notes.txt file"
+
+[[action_exemplar]]
+action = "search"
+text = "find my resume"
+
+[[action_exemplar]]
+action = "search"
+text = "search for the budget spreadsheet"
+
+[[action_exemplar]]
+action = "search"
+text = "can you locate my tax documents"
+
+[[action_exemplar]]
+action = "search"
+text = "look for a file named invoice"
+
+[[action_exemplar]]
+action = "search"
+text = "find the presentation I made last week"
+
+[[action_exemplar]]
+action = "read"
+text = "read the contents of that pdf"
+
+[[action_exemplar]]
+action = "read"
+text = "open and summarize this file"
+
+[[action_exemplar]]
+action = "read"
+text = "what does my resume say"
+
+[[action_exemplar]]
+action = "read"
+text = "read my notes.txt file"
+
+[[action_exemplar]]
+action = "read"
+text = "show me what's in that document"
+
+[[action_exemplar]]
+action = "write"
+text = "write this text to a new file"
+
+[[action_exemplar]]
+action = "write"
+text = "save this summary to a file called notes.txt"
+
+[[action_exemplar]]
+action = "write"
+text = "create a text file with this content"
+
+[[action_exemplar]]
+action = "write"
+text = "save this as a text file"

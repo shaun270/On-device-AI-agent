@@ -13,6 +13,8 @@ mod complete_reminder;
 mod list_reminders;
 mod set_reminder;
 pub mod commands;
+pub mod exemplars;
+pub mod prompts;
 pub mod router;
 pub mod system;
 

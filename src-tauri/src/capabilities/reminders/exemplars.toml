@@ -1,0 +1,140 @@
+# Router exemplars for the "reminders" domain.
+#
+# `domain_exemplar` = phrases that just say "this is about reminders at all"
+# (root-level match). `action_exemplar` = phrases scoped to one specific
+# action (leaf-level match, only compared once the domain already matched).
+# Grow either list over time as real user phrasing surfaces mismatches —
+# see router/build.rs for how these get embedded.
+
+[[domain_exemplar]]
+text = "remind me to call the dentist tomorrow"
+
+[[domain_exemplar]]
+text = "set a reminder to buy milk"
+
+[[domain_exemplar]]
+text = "what do i have to do today"
+
+[[domain_exemplar]]
+text = "what's on my reminders list"
+
+[[domain_exemplar]]
+text = "show me this week's reminders"
+
+[[domain_exemplar]]
+text = "mark call mom as done"
+
+[[domain_exemplar]]
+text = "check off buy groceries"
+
+[[domain_exemplar]]
+text = "create a reminder for the next 3 days to pray at 9am"
+
+[[domain_exemplar]]
+text = "remind me every day this week to take my vitamins"
+
+[[domain_exemplar]]
+text = "delete my reminder about the gym"
+
+[[domain_exemplar]]
+text = "clear the false reminders you created"
+
+[[domain_exemplar]]
+text = "remind me to go to the gym in 2 hours"
+
+[[domain_exemplar]]
+text = "add a to-do to pick up the dry cleaning"
+
+[[domain_exemplar]]
+text = "what reminders are overdue"
+
+[[domain_exemplar]]
+text = "remind me to submit the report by friday"
+
+[[action_exemplar]]
+action = "set"
+text = "remind me to call the dentist tomorrow"
+
+[[action_exemplar]]
+action = "set"
+text = "add a reminder to buy milk"
+
+[[action_exemplar]]
+action = "set"
+text = "remind me to go to the gym in 2 hours"
+
+[[action_exemplar]]
+action = "set"
+text = "create a reminder to submit the report by friday"
+
+[[action_exemplar]]
+action = "set"
+text = "remind me to call my dad at 5pm ist tomorrow"
+
+[[action_exemplar]]
+action = "set_many"
+text = "create a reminder for the next 3 days to pray at 9am"
+
+[[action_exemplar]]
+action = "set_many"
+text = "remind me every day this week to take my vitamins"
+
+[[action_exemplar]]
+action = "set_many"
+text = "set a daily reminder for the next 5 days to drink water"
+
+[[action_exemplar]]
+action = "set_many"
+text = "remind me to stretch each morning for the next week"
+
+[[action_exemplar]]
+action = "list"
+text = "what do i have to do today"
+
+[[action_exemplar]]
+action = "list"
+text = "show me this week's reminders"
+
+[[action_exemplar]]
+action = "list"
+text = "what's on my reminders list"
+
+[[action_exemplar]]
+action = "list"
+text = "what reminders are overdue"
+
+[[action_exemplar]]
+action = "list"
+text = "what do i have to do for the whole of next week"
+
+[[action_exemplar]]
+action = "complete"
+text = "mark call mom as done"
+
+[[action_exemplar]]
+action = "complete"
+text = "check off buy groceries"
+
+[[action_exemplar]]
+action = "complete"
+text = "complete the dentist reminder"
+
+[[action_exemplar]]
+action = "complete"
+text = "mark the gym reminder as finished"
+
+[[action_exemplar]]
+action = "clarify"
+text = "delete my reminder about the gym"
+
+[[action_exemplar]]
+action = "clarify"
+text = "clear the false reminders you created"
+
+[[action_exemplar]]
+action = "clarify"
+text = "remove all my reminders"
+
+[[action_exemplar]]
+action = "clarify"
+text = "can you delete the milk reminder"

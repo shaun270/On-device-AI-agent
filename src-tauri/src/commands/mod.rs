@@ -5,3 +5,4 @@
 pub mod chat;
 pub mod hotkey;
 pub mod quit;
+pub mod route;
