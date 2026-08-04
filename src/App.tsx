@@ -7,8 +7,11 @@ import { useWindowControls } from "./hooks/useWindowControls";
 import { useKeyboard } from "./hooks/useKeyboard";
 import {
   peekReminderEarlyClarify,
-  tryHandleReminderMessage,
+  resolveReminderIntentFromParsed,
+  runReminderAction,
+  tryReminderFastPath,
 } from "./features/reminders";
+import { routeMessage, currentDateContext } from "./router";
 
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { BrandBar } from "./components/BrandBar";
@@ -65,41 +68,58 @@ export default function App() {
 
     setStatus("thinking");
 
+    // Registered up front, not just before generate_response: the router's
+    // files domain can trigger a write-approval-request too (see
+    // src-tauri/src/commands/route.rs), and needs a listener already in
+    // place before that call happens, not after.
+    const { listen } = await import("@tauri-apps/api/event");
+    const unlistenStatus = await listen<string>("tool-status", (event) => {
+      if (event.payload === "Done.") {
+        setToolStatus(null);
+      } else {
+        setToolStatus(event.payload);
+      }
+    });
+    const unlistenWrite = await listen<string>("write-approval-request", async (event) => {
+      const approved = window.confirm(`Martha wants to create or modify the following file:\n\n${event.payload}\n\nDo you want to allow this?`);
+      await invoke("approve_write", { approved });
+    });
+
     try {
-      const reminderReply = await tryHandleReminderMessage(trimmed);
-      if (reminderReply !== null) {
-        addMessage("assistant", reminderReply);
+      const fastPathReply = await tryReminderFastPath(trimmed);
+      if (fastPathReply !== null) {
+        addMessage("assistant", fastPathReply);
         setStatus("idle");
         return;
       }
-      
+
+      const outcome = await routeMessage(trimmed);
+      if (outcome.kind === "reply") {
+        addMessage("assistant", outcome.message);
+        setStatus("idle");
+        return;
+      }
+      if (outcome.kind === "reminder") {
+        const action = resolveReminderIntentFromParsed(trimmed, outcome.parsed);
+        if (action) {
+          const reply = await runReminderAction(action);
+          addMessage("assistant", reply);
+          setStatus("idle");
+          return;
+        }
+        // normalizeReminderAction decided this isn't actionable after all (e.g. kind "chat") — fall through to chat.
+      }
+
       // Fallback to chat model with tools
-      const { listen } = await import("@tauri-apps/api/event");
-      
-      const unlistenStatus = await listen<string>("tool-status", (event) => {
-          if (event.payload === "Done.") {
-              setToolStatus(null);
-          } else {
-              setToolStatus(event.payload);
-          }
+      const reply = await invoke<string>("generate_response", {
+        history: history,
+        agentName: settings.agentName,
+        currentDate: currentDateContext(),
       });
-      
-      const unlistenWrite = await listen<string>("write-approval-request", async (event) => {
-          const approved = window.confirm(`Martha wants to create or modify the following file:\n\n${event.payload}\n\nDo you want to allow this?`);
-          await invoke("approve_write", { approved });
-      });
-      
-      const reply = await invoke<string>("generate_response", { 
-          history: history,
-          agentName: settings.agentName
-      });
-      
+
       addMessage("assistant", reply);
       setStatus("idle");
-      setToolStatus(null);
-      unlistenStatus();
-      unlistenWrite();
-      
+
     } catch (err) {
       console.error("invoke error:", err);
       let message = "⚠ Something went wrong. Please try again.";
@@ -112,8 +132,11 @@ export default function App() {
       }
       addMessage("assistant", message);
       setStatus("error");
-      setToolStatus(null);
       setTimeout(() => setStatus("idle"), 2000);
+    } finally {
+      setToolStatus(null);
+      unlistenStatus();
+      unlistenWrite();
     }
   }
 
