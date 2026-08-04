@@ -6,8 +6,10 @@
 
 mod capabilities;
 mod commands;
+mod embedding;
 mod llm;
 mod model_download;
+mod router;
 mod shared;
 pub mod tools;
 
@@ -25,7 +27,19 @@ pub fn run() {
 
             app.manage(AppState::new());
 
+            // llama.cpp's backend is a process-wide singleton (init() fails if one
+            // is already alive) — both the chat model and the embedding model must
+            // share this one instance, not each create their own.
+            let backend = match llm::init_shared_backend() {
+                Ok(backend) => backend,
+                Err(e) => {
+                    println!("Failed to init llama backend: {e}");
+                    return Ok(());
+                }
+            };
+
             let app_handle = app.handle().clone();
+            let llm_backend = std::sync::Arc::clone(&backend);
             std::thread::spawn(move || {
                 let model_path = model_download::default_model_path();
 
@@ -40,7 +54,7 @@ pub fn run() {
                 }
 
                 println!("Loading local model from {}", model_path.display());
-                match llm::LlamaEngine::new(&model_path) {
+                match llm::LlamaEngine::new(llm_backend, &model_path) {
                     Ok(engine) => {
                         println!("Model loaded successfully!");
                         if let Ok(mut lock) = app_handle.state::<AppState>().llm.lock() {
@@ -50,6 +64,59 @@ pub fn run() {
                     Err(e) => {
                         println!("Failed to load model: {e}");
                     }
+                }
+            });
+
+            let embed_app_handle = app.handle().clone();
+            let embed_backend = std::sync::Arc::clone(&backend);
+            std::thread::spawn(move || {
+                let embed_model_path = model_download::default_embedding_model_path();
+
+                if let Err(e) = model_download::ensure_embedding_model(&embed_model_path) {
+                    println!("Failed to prepare embedding model: {e}");
+                    return;
+                }
+
+                if !embed_model_path.is_file() {
+                    println!("Embedding model file missing at {}", embed_model_path.display());
+                    return;
+                }
+
+                println!("Loading embedding model from {}", embed_model_path.display());
+                let engine = match embedding::EmbeddingEngine::new(embed_backend, &embed_model_path) {
+                    Ok(engine) => {
+                        println!("Embedding model loaded successfully!");
+                        engine
+                    }
+                    Err(e) => {
+                        println!("Failed to load embedding model: {e}");
+                        return;
+                    }
+                };
+
+                println!("Building intent router from capability exemplars…");
+                let domains = match capabilities::all_domain_exemplars() {
+                    Ok(domains) => domains,
+                    Err(e) => {
+                        println!("Failed to load router exemplars: {e}");
+                        return;
+                    }
+                };
+
+                match router::build::build_router(&engine, domains) {
+                    Ok(router) => {
+                        println!("Router built successfully!");
+                        if let Ok(mut lock) = embed_app_handle.state::<AppState>().router.lock() {
+                            *lock = Some(router);
+                        }
+                    }
+                    Err(e) => {
+                        println!("Failed to build router: {e}");
+                    }
+                }
+
+                if let Ok(mut lock) = embed_app_handle.state::<AppState>().embedder.lock() {
+                    *lock = Some(engine);
                 }
             });
 
@@ -67,6 +134,7 @@ pub fn run() {
             commands::chat::approve_write,
             commands::quit::quit_app,
             commands::hotkey::update_hotkey,
+            commands::route::route_intent,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
