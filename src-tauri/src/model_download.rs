@@ -14,8 +14,11 @@ const REMOTE_URL: &str =
     "https://huggingface.co/Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/main/qwen2.5-coder-3b-instruct-q4_k_m.gguf";
 
 /// Small sentence-embedding model used by the intent router (not the chat/coder model above).
-const EMBED_LOCAL_FILENAME: &str = "all-minilm-l6-v2-q8_0.gguf";
-const EMBED_REMOTE_URL: &str = "https://huggingface.co/second-state/All-MiniLM-L6-v2-Embedding-GGUF/resolve/main/all-MiniLM-L6-v2-Q8_0.gguf";
+/// L12 over L6: same accuracy but meaningfully wider decision margins when
+/// A/B'd against L6, BGE-small, E5-small, and Nomic-embed on the router's
+/// own exemplar set + held-out phrasings, at no added latency.
+const EMBED_LOCAL_FILENAME: &str = "all-minilm-l12-v2-q8_0.gguf";
+const EMBED_REMOTE_URL: &str = "https://huggingface.co/sheldonrobinson/all-MiniLM-L12-v2-Q8_0-GGUF/resolve/main/all-minilm-l12-v2-q8_0.gguf";
 
 fn models_dir() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_default();
@@ -37,7 +40,7 @@ pub fn ensure_model(model_path: &Path) -> Result<(), String> {
 
 /// Download the router's embedding GGUF if missing. Same shape as `ensure_model`, much smaller file.
 pub fn ensure_embedding_model(model_path: &Path) -> Result<(), String> {
-    download_gguf(model_path, EMBED_REMOTE_URL, 10_000_000, "~25MB")
+    download_gguf(model_path, EMBED_REMOTE_URL, 20_000_000, "~37MB")
 }
 
 fn download_gguf(model_path: &Path, url: &str, min_size: u64, size_hint: &str) -> Result<(), String> {
