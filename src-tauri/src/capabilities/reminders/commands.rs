@@ -119,6 +119,41 @@ pub async fn complete_reminder(
     .map_err(|e| format!("task failed: {e}"))?
 }
 
+/// Structured reminders listing (with each item's stable identifier) for
+/// the personalization picker's "tap the one you meant" step — see
+/// `system::list_reminders_structured`'s doc comment for why this can't
+/// just reuse `list_reminders`'s text output.
+#[tauri::command]
+pub async fn list_reminders_structured(
+    search: Option<String>,
+    days_ahead: Option<u32>,
+    limit: Option<u32>,
+) -> Result<Vec<super::system::ReminderSummary>, String> {
+    tokio::task::spawn_blocking(move || {
+        let mut input = json!({ "limit": limit.unwrap_or(50) });
+        if let Some(s) = search {
+            input["search"] = json!(s);
+        }
+        if let Some(n) = days_ahead {
+            input["days_ahead"] = json!(n);
+        }
+        let query = super::system::list_query_from_json(&input)?;
+        super::system::list_reminders_structured(&query)
+    })
+    .await
+    .map_err(|e| format!("task failed: {e}"))?
+}
+
+/// Check off a reminder by its exact identifier — used by the
+/// personalization picker once the user taps a specific item from
+/// `list_reminders_structured`, so there's no title/date re-matching.
+#[tauri::command]
+pub async fn complete_reminder_by_id(id: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || super::system::complete_reminder_by_id(&id))
+        .await
+        .map_err(|e| format!("task failed: {e}"))?
+}
+
 /// Open System Settings → Privacy → Reminders (EventKit grant).
 #[tauri::command]
 pub fn open_reminders_settings() -> Result<String, String> {
