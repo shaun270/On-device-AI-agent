@@ -7,7 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type ReminderAction =
   | { kind: "list"; range?: string; days_ahead?: number; start?: string; end?: string; search?: string }
-  | { kind: "complete"; title: string; match_mode: "exact" | "contains" }
+  | { kind: "complete"; title: string; match_mode: "exact" | "contains"; due?: string }
   | { kind: "set"; title: string; due?: string; list_name?: string }
   | { kind: "set_many"; items: { title: string; due?: string; list_name?: string }[] }
   | { kind: "clarify"; message: string };
@@ -137,10 +137,17 @@ function parseClock(raw: string): { h: number; m: number } | null {
 function looksLikeListQuery(text: string): boolean {
   const t = text.toLowerCase();
   if (
-    /\b(?:remind\s+me\s+to|create\s+(?:\d+\s+)?(?:a\s+)?reminders?|add\s+(?:\d+\s+)?(?:a\s+)?reminders?|set\s+(?:\d+\s+)?(?:a\s+)?reminders?|make\s+(?:\d+\s+)?(?:a\s+)?reminders?|check\s*off|mark\s+(?:as\s+)?done)\b/i.test(
+    /\b(?:remind\s+me\s+to|create\s+(?:\d+\s+)?(?:a\s+)?reminders?|add\s+(?:\d+\s+)?(?:a\s+)?reminders?|set\s+(?:\d+\s+)?(?:a\s+)?reminders?|make\s+(?:\d+\s+)?(?:a\s+)?reminders?|mark\s+(?:as\s+)?done)\b/i.test(
       t,
     )
   ) {
+    return false;
+  }
+  // "check off X" / "check X off" — the word "off" can trail well after
+  // "check" (e.g. "check the sleep reminder off"), not just fused to it.
+  // Without this, the generic "check" + "reminder" overlap check below
+  // wrongly treats these as list queries instead of completions.
+  if (/\bcheck\b[\s\S]*\boff\b/i.test(t)) {
     return false;
   }
   if (/\bwhat do i (?:have|need) to do\b/i.test(t)) return true;
@@ -449,10 +456,13 @@ export function normalizeReminderAction(
       return { kind: "clarify", message: "Which reminder should I check off? e.g. check off Buy milk" };
     }
     const mode = String(parsed.match_mode ?? "contains").toLowerCase();
+    const dueRaw = parsed.due != null ? String(parsed.due).trim() : "";
+    const due = /^\d{4}-\d{2}-\d{2}/.test(dueRaw) ? dueRaw.slice(0, 10) : undefined;
     return {
       kind: "complete",
       title,
       match_mode: mode === "exact" ? "exact" : "contains",
+      due,
     };
   }
 

@@ -331,6 +331,21 @@ const CASES: Case[] = [
     llm: { kind: "complete", title: "somethingthatdoesnotexist" },
     expect: { kind: "complete", titleIncludes: ["somethingthatdoesnotexist"] },
   },
+  {
+    // Real bug: "off" trailing well after "check" (not fused as "check off")
+    // was matching the generic "check" + "reminder" list-query heuristic,
+    // overriding the router's correct "complete" decision back to "list".
+    id: "E7",
+    prompt: "no i mean check the sleep reminder off",
+    llm: { kind: "complete", title: "sleep", match_mode: "contains" },
+    expect: { kind: "complete", titleIncludes: ["sleep"] },
+  },
+  {
+    id: "E8",
+    prompt: "check off the sleep reminder bro",
+    llm: { kind: "complete", title: "sleep", match_mode: "contains" },
+    expect: { kind: "complete", titleIncludes: ["sleep"] },
+  },
 
   // F — unsupported
   {
