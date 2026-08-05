@@ -82,6 +82,71 @@ async fn call_llm_for_json(
     serde_json::from_str(&cleaned).map_err(|e| format!("slot-filler returned invalid JSON: {e}"))
 }
 
+/// Personalization feedback: the user told us which domain/action a past
+/// message *should* have routed to (see the feedback-bar picker in the
+/// frontend). Stores it in `~/.martha/router_exemplars.jsonl` and rebuilds
+/// the router immediately so the correction applies without a restart —
+/// same `Mutex<Option<Router>>` swap `lib.rs` uses at startup.
+#[tauri::command]
+pub async fn submit_router_correction(
+    text: String,
+    domain: String,
+    action: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<String, String> {
+    let text = text.trim().to_string();
+    if text.is_empty() {
+        return Err("correction text must not be empty".to_string());
+    }
+
+    crate::router::personalization::append_correction(&crate::router::personalization::Correction {
+        domain,
+        action,
+        text,
+    })?;
+
+    let rebuilt = {
+        let embedder = state.embedder.lock().map_err(|_| "Failed to lock embedder".to_string())?;
+        let Some(embedder) = embedder.as_ref() else {
+            // Correction is saved either way — it'll be picked up next launch
+            // even if the embedder isn't warm yet for a live rebuild.
+            return Ok("Got it — saved, will take effect next launch.".to_string());
+        };
+        let domains = capabilities::all_domain_exemplars_personalized()?;
+        crate::router::build::build_router(embedder, domains)?
+    };
+
+    let mut router_lock = state.router.lock().map_err(|_| "Failed to lock router".to_string())?;
+    *router_lock = Some(rebuilt);
+
+    Ok("Got it — I'll route that better next time.".to_string())
+}
+
+/// Same slot-filling + execution as `route_intent`, but the domain/action is
+/// given directly instead of decided by the router — used by the
+/// personalization picker's text-entry step, where the user already told us
+/// which tool they meant and retyped what they wanted in their own words.
+/// Returns the identical `{"kind": ...}` contract as `route_intent`'s
+/// per-domain branches, so the frontend's existing response handling
+/// (`runReminderAction` / display-as-reply) works unchanged.
+#[tauri::command]
+pub async fn execute_forced_action(
+    domain: String,
+    action: String,
+    text: String,
+    current_date: String,
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<String, String> {
+    llm_access::wait_until_ready(&state).await?;
+
+    match domain.as_str() {
+        "reminders" => fill_reminder_slots(&action, &text, &current_date, &state).await,
+        "files" => fill_file_slots(&action, &text, &state, &app_handle).await,
+        other => Err(format!("unknown domain: {other}")),
+    }
+}
+
 /// Routes `text` through the embedding router, then fills slots for the
 /// matched action. Returns `{"kind":"unhandled"}` when nothing confidently
 /// matched — the frontend falls back to `generate_response` in that case.

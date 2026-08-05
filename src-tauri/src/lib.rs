@@ -95,7 +95,7 @@ pub fn run() {
                 };
 
                 println!("Building intent router from capability exemplars…");
-                let domains = match capabilities::all_domain_exemplars() {
+                let domains = match capabilities::all_domain_exemplars_personalized() {
                     Ok(domains) => domains,
                     Err(e) => {
                         println!("Failed to load router exemplars: {e}");
@@ -127,6 +127,8 @@ pub fn run() {
             capabilities::reminders::commands::set_reminder,
             capabilities::reminders::commands::list_reminders,
             capabilities::reminders::commands::complete_reminder,
+            capabilities::reminders::commands::list_reminders_structured,
+            capabilities::reminders::commands::complete_reminder_by_id,
             capabilities::reminders::commands::open_reminders_settings,
             capabilities::reminders::commands::classify_intent,
             // shared shell
@@ -135,6 +137,8 @@ pub fn run() {
             commands::quit::quit_app,
             commands::hotkey::update_hotkey,
             commands::route::route_intent,
+            commands::route::submit_router_correction,
+            commands::route::execute_forced_action,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
