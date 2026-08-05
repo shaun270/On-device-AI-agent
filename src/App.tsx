@@ -61,7 +61,7 @@ export default function App() {
     const trimmed = text.trim();
     const early = peekReminderEarlyClarify(trimmed);
     if (early) {
-      addMessage("assistant", early);
+      addMessage("assistant", early, trimmed);
       setStatus("idle");
       return;
     }
@@ -88,14 +88,14 @@ export default function App() {
     try {
       const fastPathReply = await tryReminderFastPath(trimmed);
       if (fastPathReply !== null) {
-        addMessage("assistant", fastPathReply);
+        addMessage("assistant", fastPathReply, trimmed);
         setStatus("idle");
         return;
       }
 
       const outcome = await routeMessage(trimmed);
       if (outcome.kind === "reply") {
-        addMessage("assistant", outcome.message);
+        addMessage("assistant", outcome.message, trimmed);
         setStatus("idle");
         return;
       }
@@ -103,7 +103,7 @@ export default function App() {
         const action = resolveReminderIntentFromParsed(trimmed, outcome.parsed);
         if (action) {
           const reply = await runReminderAction(action);
-          addMessage("assistant", reply);
+          addMessage("assistant", reply, trimmed);
           setStatus("idle");
           return;
         }
@@ -117,7 +117,7 @@ export default function App() {
         currentDate: currentDateContext(),
       });
 
-      addMessage("assistant", reply);
+      addMessage("assistant", reply, trimmed);
       setStatus("idle");
 
     } catch (err) {
@@ -193,6 +193,7 @@ export default function App() {
                 agentName={settings.agentName}
                 onDeleteMessage={deleteMessage}
                 onClearHistory={clearActiveSession}
+                onCorrectionExecuted={(resultText) => addMessage("assistant", resultText)}
               />
               <InputArea
                 value={input}

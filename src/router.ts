@@ -52,3 +52,33 @@ export async function routeMessage(text: string): Promise<RouteOutcome> {
     return { kind: "unhandled" };
   }
 }
+
+/**
+ * Same contract as `routeMessage`, but the domain/action is given directly
+ * instead of decided by the router — used by the personalization picker's
+ * text-entry correction step (see `features/personalization`).
+ */
+export async function executeForcedAction(
+  domain: string,
+  action: string,
+  text: string,
+): Promise<RouteOutcome> {
+  try {
+    const result = await invoke<string>("execute_forced_action", {
+      domain,
+      action,
+      text,
+      currentDate: currentDateContext(),
+    });
+
+    const parsed = JSON.parse(result) as Record<string, unknown>;
+    const kind = String(parsed.kind ?? "");
+
+    if (!kind || kind === "unhandled") return { kind: "unhandled" };
+    if (kind === "reply") return { kind: "reply", message: String(parsed.message ?? "") };
+    return { kind: "reminder", parsed };
+  } catch (error) {
+    console.error("Failed to execute forced action:", error);
+    return { kind: "unhandled" };
+  }
+}

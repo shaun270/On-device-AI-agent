@@ -8,13 +8,15 @@
  */
 
 import type { Message } from "../types";
+import { FeedbackBar } from "../features/personalization";
 
 interface Props {
   message: Message;
   onDelete: (id: string) => void;
+  onCorrectionExecuted: (resultText: string) => void;
 }
 
-export function MessageBubble({ message, onDelete }: Props) {
+export function MessageBubble({ message, onDelete, onCorrectionExecuted }: Props) {
   const time = new Date(message.timestamp).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
@@ -35,6 +37,12 @@ export function MessageBubble({ message, onDelete }: Props) {
             ✕
           </button>
         </div>
+        {message.role === "assistant" && message.precedingUserText && (
+          <FeedbackBar
+            precedingUserText={message.precedingUserText}
+            onCorrectionExecuted={onCorrectionExecuted}
+          />
+        )}
       </div>
     </div>
   );

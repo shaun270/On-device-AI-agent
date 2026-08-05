@@ -5,6 +5,9 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: number;
+  /** The user message this reply answered — lets the feedback bar (personalization
+   * picker) know which text to attach a correction to. Assistant messages only. */
+  precedingUserText?: string;
 }
 
 /** A full conversation thread. Title is auto-set from the first user message. */
