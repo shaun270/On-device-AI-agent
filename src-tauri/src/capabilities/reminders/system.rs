@@ -292,6 +292,7 @@ pub fn complete_reminder(
     title: &str,
     match_mode: &str,
     list_name: Option<&str>,
+    due_date: Option<&str>,
 ) -> Result<String, String> {
     let title = title.trim();
     if title.is_empty() {
@@ -308,27 +309,76 @@ pub fn complete_reminder(
         }
     };
 
+    // Multiple reminders can legitimately share a title (e.g. a daily "sleep"
+    // reminder created for several days) — title alone can't tell them apart.
+    let wanted_date = match due_date.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(raw) => Some(parse_ymd(raw)?),
+        None => None,
+    };
+
     with_reminders(|mgr| {
         mgr.ensure_authorized().map_err(map_ek_err)?;
 
         let items = mgr.fetch_incomplete_reminders().map_err(map_ek_err)?;
 
         let needle = title.to_ascii_lowercase();
-        let found = items.into_iter().find(|item| {
-            if !calendar_matches(item, list_name) {
-                return false;
-            }
-            let hay = item.title.to_ascii_lowercase();
-            if mode == "exact" {
-                hay == needle
-            } else {
-                hay.contains(&needle)
-            }
-        });
+        let mut matches: Vec<_> = items
+            .into_iter()
+            .filter(|item| {
+                if !calendar_matches(item, list_name) {
+                    return false;
+                }
+                let hay = item.title.to_ascii_lowercase();
+                if mode == "exact" {
+                    hay == needle
+                } else {
+                    hay.contains(&needle)
+                }
+            })
+            .collect();
 
-        let Some(item) = found else {
+        if matches.is_empty() {
             return Err(format!(
                 "There is no incomplete reminder matching \"{title}\"."
+            ));
+        }
+
+        let due_options = |matches: &[eventkit::ReminderItem]| {
+            matches
+                .iter()
+                .map(|item| {
+                    item.due_date
+                        .map(|dt| dt.format("%Y-%m-%d %H:%M").to_string())
+                        .unwrap_or_else(|| "no due date".to_string())
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+
+        let item = if matches.len() == 1 {
+            matches.remove(0)
+        } else if let Some((y, m, d)) = wanted_date {
+            let idx = matches.iter().position(|item| {
+                item.due_date.is_some_and(|dt| {
+                    let nd = dt.date_naive();
+                    nd.year() as u32 == y && nd.month() == m && nd.day() == d
+                })
+            });
+            match idx {
+                Some(i) => matches.remove(i),
+                None => {
+                    return Err(format!(
+                        "Found {} reminders matching \"{title}\" but none due on {y:04}-{m:02}-{d:02}. Due dates I have: {}.",
+                        matches.len(),
+                        due_options(&matches)
+                    ));
+                }
+            }
+        } else {
+            return Err(format!(
+                "Found {} reminders matching \"{title}\" — which one? Due dates: {}.",
+                matches.len(),
+                due_options(&matches)
             ));
         };
 
@@ -351,6 +401,7 @@ pub fn complete_reminder(
     _title: &str,
     _match_mode: &str,
     _list_name: Option<&str>,
+    _due_date: Option<&str>,
 ) -> Result<String, String> {
     Err("reminders are only supported on macOS".into())
 }

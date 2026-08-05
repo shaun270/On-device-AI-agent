@@ -100,6 +100,7 @@ pub async fn complete_reminder(
     title: String,
     match_mode: Option<String>,
     list_name: Option<String>,
+    due: Option<String>,
 ) -> Result<String, String> {
     tokio::task::spawn_blocking(move || {
         let mut input = json!({ "title": title });
@@ -108,6 +109,9 @@ pub async fn complete_reminder(
         }
         if let Some(l) = list_name {
             input["list_name"] = json!(l);
+        }
+        if let Some(d) = due {
+            input["due"] = json!(d);
         }
         capabilities::dispatch("complete_reminder", input)
     })

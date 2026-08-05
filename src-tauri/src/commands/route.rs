@@ -277,3 +277,55 @@ fn expand_tilde(path: &str) -> String {
     }
     path.to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Real Qwen model, real inference — downloads the ~1.9GB GGUF on first
+    /// run. Reproduces a real live bug: the user had 5 reminders all titled
+    /// "sleep" (one per day), and "check off the sleep reminder on 8th
+    /// august" needs the "due" field (added to prompts/complete.rs) so
+    /// system::complete_reminder can disambiguate by date instead of
+    /// checking off an arbitrary one. Not run by default:
+    /// `cargo test --lib -- --ignored complete_slot_filler_extracts_disambiguating_due_date`.
+    #[test]
+    #[ignore]
+    fn complete_slot_filler_extracts_disambiguating_due_date() {
+        let model_path = crate::model_download::default_model_path();
+        crate::model_download::ensure_model(&model_path).expect("failed to download model");
+
+        let backend = crate::llm::init_shared_backend().expect("failed to init llama backend");
+        let engine = crate::llm::LlamaEngine::new(backend, &model_path).expect("failed to load model");
+
+        let current_date = "now=2026-08-04T19:50; tomorrow=2026-08-05; year=2026";
+        let system_prompt = reminder_prompts::complete::system_prompt(current_date);
+
+        let res = engine
+            .generate(
+                crate::shared::PromptOrHistory::Prompt("check off the sleep reminder on 8th august"),
+                "Router",
+                Some(system_prompt),
+                Some(128),
+                current_date,
+            )
+            .expect("generation failed");
+
+        println!("raw response: {res}");
+
+        let cleaned = extract_json_object(&res).unwrap_or_else(|| res.trim().to_string());
+        let parsed: Value =
+            serde_json::from_str(&cleaned).unwrap_or_else(|e| panic!("invalid JSON: {e}\nraw: {res}"));
+
+        assert_eq!(
+            parsed["title"].as_str().unwrap_or("").to_lowercase(),
+            "sleep",
+            "expected title=sleep, got {parsed}"
+        );
+        let due = parsed["due"].as_str().unwrap_or("");
+        assert!(
+            due.starts_with("2026-08-08"),
+            "expected due starting 2026-08-08, got {due:?} — raw: {res}"
+        );
+    }
+}

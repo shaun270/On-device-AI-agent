@@ -18,6 +18,7 @@ export async function runReminderAction(action: ReminderAction): Promise<string>
     return invoke<string>("complete_reminder", {
       title: action.title,
       match_mode: action.match_mode,
+      due: action.due ?? null,
     });
   }
   if (action.kind === "set_many") {

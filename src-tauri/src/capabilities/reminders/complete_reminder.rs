@@ -31,6 +31,10 @@ impl Tool for CompleteReminderTool {
                 "list_name": {
                     "type": "string",
                     "description": "Optional Reminders list to search within."
+                },
+                "due": {
+                    "type": "string",
+                    "description": "Optional YYYY-MM-DD to disambiguate when multiple reminders share the same title (e.g. a daily reminder created for several days)."
                 }
             },
             "required": ["title"]
@@ -51,6 +55,11 @@ impl Tool for CompleteReminderTool {
             .and_then(|v| v.as_str())
             .map(str::trim)
             .filter(|s| !s.is_empty());
-        system::complete_reminder(title, match_mode, list_name)
+        let due = input
+            .get("due")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty());
+        system::complete_reminder(title, match_mode, list_name, due)
     }
 }
