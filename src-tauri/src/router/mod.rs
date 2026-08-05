@@ -11,6 +11,7 @@
 pub mod build;
 pub mod decide;
 pub mod index;
+pub mod personalization;
 pub mod types;
 
 use std::collections::HashMap;

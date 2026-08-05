@@ -37,6 +37,16 @@ pub fn all_domain_exemplars() -> Result<Vec<DomainExemplars>, String> {
     ])
 }
 
+/// Same as `all_domain_exemplars`, plus any user-taught corrections merged
+/// in from `~/.martha/router_exemplars.jsonl`. This is what should actually
+/// feed `build_router` — at startup (`lib.rs`) and whenever a correction
+/// triggers a live router rebuild (`commands/route.rs`).
+pub fn all_domain_exemplars_personalized() -> Result<Vec<DomainExemplars>, String> {
+    let mut domains = all_domain_exemplars()?;
+    crate::router::personalization::merge_corrections_into(&mut domains);
+    Ok(domains)
+}
+
 /// Anthropic-style tool definitions for the agent core.
 #[allow(dead_code)]
 pub fn tool_definitions() -> Vec<serde_json::Value> {
