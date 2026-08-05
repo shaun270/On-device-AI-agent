@@ -114,6 +114,13 @@ mod tests {
                 "reminders",
                 Some("set_many"),
             ),
+            // Real user session: "check off the sleep reminder on 8th august"
+            // got routed to list, and "check off the sleep reminder bro" got
+            // routed to clarify (the delete-not-supported message) — both
+            // should be "complete".
+            ("check off the sleep reminder on 8th august", "reminders", Some("complete")),
+            ("check off the sleep reminder bro", "reminders", Some("complete")),
+            ("check off the sleep reminder", "reminders", Some("complete")),
         ];
 
         println!("\n{:<55} {:<10} {:>8} {:>8}  {}", "utterance", "expected", "score", "margin", "top_label");

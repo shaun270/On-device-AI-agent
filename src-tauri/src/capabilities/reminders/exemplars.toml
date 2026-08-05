@@ -124,6 +124,30 @@ action = "complete"
 text = "mark the gym reminder as finished"
 
 [[action_exemplar]]
+action = "complete"
+text = "check off the sleep reminder"
+
+[[action_exemplar]]
+action = "complete"
+text = "check off the gym reminder"
+
+[[action_exemplar]]
+action = "complete"
+text = "check off the milk reminder for today"
+
+[[action_exemplar]]
+action = "complete"
+text = "check off the sleep reminder on the 8th"
+
+[[action_exemplar]]
+action = "complete"
+text = "check off the dentist reminder please"
+
+[[action_exemplar]]
+action = "complete"
+text = "check off the sleep reminder bro"
+
+[[action_exemplar]]
 action = "clarify"
 text = "delete my reminder about the gym"
 
