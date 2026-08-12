@@ -13,18 +13,40 @@ const LOCAL_FILENAME: &str = "qwen2.5-3b-coder-q4_k_m.gguf";
 const REMOTE_URL: &str =
     "https://huggingface.co/Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/main/qwen2.5-coder-3b-instruct-q4_k_m.gguf";
 
-pub fn default_model_path() -> PathBuf {
+/// Small sentence-embedding model used by the intent router (not the chat/coder model above).
+/// L12 over L6: same accuracy but meaningfully wider decision margins when
+/// A/B'd against L6, BGE-small, E5-small, and Nomic-embed on the router's
+/// own exemplar set + held-out phrasings, at no added latency.
+const EMBED_LOCAL_FILENAME: &str = "all-minilm-l12-v2-q8_0.gguf";
+const EMBED_REMOTE_URL: &str = "https://huggingface.co/sheldonrobinson/all-MiniLM-L12-v2-Q8_0-GGUF/resolve/main/all-minilm-l12-v2-q8_0.gguf";
+
+fn models_dir() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_default();
-    PathBuf::from(home)
-        .join("Library/Application Support/com.hey-martha.dev/models")
-        .join(LOCAL_FILENAME)
+    PathBuf::from(home).join("Library/Application Support/com.hey-martha.dev/models")
+}
+
+pub fn default_model_path() -> PathBuf {
+    models_dir().join(LOCAL_FILENAME)
+}
+
+pub fn default_embedding_model_path() -> PathBuf {
+    models_dir().join(EMBED_LOCAL_FILENAME)
 }
 
 /// Download the GGUF if missing. No-op when the file already exists and looks complete.
 pub fn ensure_model(model_path: &Path) -> Result<(), String> {
+    download_gguf(model_path, REMOTE_URL, 500_000_000, "~1.9GB")
+}
+
+/// Download the router's embedding GGUF if missing. Same shape as `ensure_model`, much smaller file.
+pub fn ensure_embedding_model(model_path: &Path) -> Result<(), String> {
+    download_gguf(model_path, EMBED_REMOTE_URL, 20_000_000, "~37MB")
+}
+
+fn download_gguf(model_path: &Path, url: &str, min_size: u64, size_hint: &str) -> Result<(), String> {
     if model_path.is_file() {
         let size = fs::metadata(model_path).map(|m| m.len()).unwrap_or(0);
-        if size > 500_000_000 {
+        if size > min_size {
             return Ok(());
         }
         println!(
@@ -41,7 +63,7 @@ pub fn ensure_model(model_path: &Path) -> Result<(), String> {
     }
 
     let tmp_path = model_path.with_extension("gguf.partial");
-    println!("Downloading model from HuggingFace (~1.9GB)…");
+    println!("Downloading model from HuggingFace ({size_hint})…");
     println!("  → {}", model_path.display());
 
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -56,7 +78,7 @@ pub fn ensure_model(model_path: &Path) -> Result<(), String> {
             .map_err(|e| format!("HTTP client error: {e}"))?;
 
         let response = client
-            .get(REMOTE_URL)
+            .get(url)
             .send()
             .await
             .map_err(|e| format!("Download request failed: {e}"))?;
@@ -65,7 +87,7 @@ pub fn ensure_model(model_path: &Path) -> Result<(), String> {
             return Err(format!(
                 "Download failed with HTTP {}: {}",
                 response.status(),
-                REMOTE_URL
+                url
             ));
         }
 

@@ -85,12 +85,13 @@ export function useChatSessions() {
 
   // ── Message management (always on the active session) ────────
 
-  function addMessage(role: Message["role"], content: string): string {
+  function addMessage(role: Message["role"], content: string, precedingUserText?: string): string {
     const msg: Message = {
       id: crypto.randomUUID(),
       role,
       content,
       timestamp: Date.now(),
+      ...(precedingUserText !== undefined ? { precedingUserText } : {}),
     };
     setStore((prev) => ({
       ...prev,

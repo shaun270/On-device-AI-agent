@@ -216,6 +216,37 @@ const CASES: Case[] = [
     llm: { kind: "set", title: "due today" },
     expect: { kind: "list", range: "today" },
   },
+  {
+    // Regression: looksLikeListQuery's creation-verb bailout didn't include
+    // "make", so "make 2 reminders that i HAVE to..." tripped the generic
+    // have+reminders list heuristic and silently redirected every creation
+    // through this phrasing into a list query (found in live testing).
+    id: "C8",
+    prompt: "make 2 reminders that i have to play football, 1 for tomorrow 9pm, the other for day after 3 pm",
+    llm: {
+      kind: "set_many",
+      items: [
+        { title: "play football", due: `${isoDate(tomorrow())}T21:00` },
+        { title: "play football", due: `${isoDate(addDays(new Date(), 2))}T15:00` },
+      ],
+    },
+    expect: { kind: "set_many", itemCount: 2 },
+  },
+  {
+    // Regression: parsed.items (distinct one-off reminders, each own due)
+    // was unreachable — the top-level parsed.title hollow-check ran first
+    // and always redirected to list, since items-shape has no top-level title.
+    id: "C9",
+    prompt: "add 2 reminders, one to call mom tomorrow at 5pm and one to email John the day after at noon",
+    llm: {
+      kind: "set_many",
+      items: [
+        { title: "call mom", due: `${isoDate(tomorrow())}T17:00` },
+        { title: "email John", due: `${isoDate(addDays(new Date(), 2))}T12:00` },
+      ],
+    },
+    expect: { kind: "set_many", itemCount: 2 },
+  },
 
   // D — timezones
   {
@@ -299,6 +330,21 @@ const CASES: Case[] = [
     prompt: "check off somethingthatdoesnotexist",
     llm: { kind: "complete", title: "somethingthatdoesnotexist" },
     expect: { kind: "complete", titleIncludes: ["somethingthatdoesnotexist"] },
+  },
+  {
+    // Real bug: "off" trailing well after "check" (not fused as "check off")
+    // was matching the generic "check" + "reminder" list-query heuristic,
+    // overriding the router's correct "complete" decision back to "list".
+    id: "E7",
+    prompt: "no i mean check the sleep reminder off",
+    llm: { kind: "complete", title: "sleep", match_mode: "contains" },
+    expect: { kind: "complete", titleIncludes: ["sleep"] },
+  },
+  {
+    id: "E8",
+    prompt: "check off the sleep reminder bro",
+    llm: { kind: "complete", title: "sleep", match_mode: "contains" },
+    expect: { kind: "complete", titleIncludes: ["sleep"] },
   },
 
   // F — unsupported

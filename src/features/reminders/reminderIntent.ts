@@ -7,7 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type ReminderAction =
   | { kind: "list"; range?: string; days_ahead?: number; start?: string; end?: string; search?: string }
-  | { kind: "complete"; title: string; match_mode: "exact" | "contains" }
+  | { kind: "complete"; title: string; match_mode: "exact" | "contains"; due?: string }
   | { kind: "set"; title: string; due?: string; list_name?: string }
   | { kind: "set_many"; items: { title: string; due?: string; list_name?: string }[] }
   | { kind: "clarify"; message: string };
@@ -137,10 +137,17 @@ function parseClock(raw: string): { h: number; m: number } | null {
 function looksLikeListQuery(text: string): boolean {
   const t = text.toLowerCase();
   if (
-    /\b(?:remind\s+me\s+to|create\s+(?:a\s+)?reminder|add\s+(?:a\s+)?reminder|set\s+(?:a\s+)?reminder|check\s*off|mark\s+(?:as\s+)?done)\b/i.test(
+    /\b(?:remind\s+me\s+to|create\s+(?:\d+\s+)?(?:a\s+)?reminders?|add\s+(?:\d+\s+)?(?:a\s+)?reminders?|set\s+(?:\d+\s+)?(?:a\s+)?reminders?|make\s+(?:\d+\s+)?(?:a\s+)?reminders?|mark\s+(?:as\s+)?done)\b/i.test(
       t,
     )
   ) {
+    return false;
+  }
+  // "check off X" / "check X off" — the word "off" can trail well after
+  // "check" (e.g. "check the sleep reminder off"), not just fused to it.
+  // Without this, the generic "check" + "reminder" overlap check below
+  // wrongly treats these as list queries instead of completions.
+  if (/\bcheck\b[\s\S]*\boff\b/i.test(t)) {
     return false;
   }
   if (/\bwhat do i (?:have|need) to do\b/i.test(t)) return true;
@@ -449,14 +456,39 @@ export function normalizeReminderAction(
       return { kind: "clarify", message: "Which reminder should I check off? e.g. check off Buy milk" };
     }
     const mode = String(parsed.match_mode ?? "contains").toLowerCase();
+    const dueRaw = parsed.due != null ? String(parsed.due).trim() : "";
+    const due = /^\d{4}-\d{2}-\d{2}/.test(dueRaw) ? dueRaw.slice(0, 10) : undefined;
     return {
       kind: "complete",
       title,
       match_mode: mode === "exact" ? "exact" : "contains",
+      due,
     };
   }
 
   if (kind === "set_many") {
+    // Distinct one-off items (each own title/due) are a fully separate shape
+    // from the "same task repeated N days" pattern below — check this first,
+    // since a top-level parsed.title is legitimately absent for this shape
+    // and must not fall into the hollow-title bailout meant for the other one.
+    if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+      const items = parsed.items
+        .map((item) => {
+          if (!item || typeof item !== "object") return null;
+          const row = item as Record<string, unknown>;
+          const title = cleanTaskTitle(String(row.title ?? "")) || String(row.title ?? "").trim();
+          if (!title || isHollowMultiTitle(title)) return null;
+          return {
+            title,
+            due: normalizeDue(row.due, userText),
+            list_name: row.list_name != null ? String(row.list_name) : undefined,
+          };
+        })
+        .filter((x): x is NonNullable<typeof x> => x != null);
+      if (items.length) return { kind: "set_many", items };
+      return listActionFromUser(userText);
+    }
+
     const titleGuess = String(parsed.title ?? "");
     if (isHollowMultiTitle(cleanTaskTitle(titleGuess) || titleGuess)) {
       return listActionFromUser(userText);
@@ -478,23 +510,6 @@ export function normalizeReminderAction(
     if (parsed.title && (parsed.days != null || parsed.count != null)) {
       const days = asPositiveInt(parsed.days ?? parsed.count, 1) ?? 1;
       return expandSetMany(String(parsed.title), days, parsed.time, userText);
-    }
-    if (Array.isArray(parsed.items) && parsed.items.length > 0) {
-      const items = parsed.items
-        .map((item) => {
-          if (!item || typeof item !== "object") return null;
-          const row = item as Record<string, unknown>;
-          const title = cleanTaskTitle(String(row.title ?? "")) || String(row.title ?? "").trim();
-          if (!title || isHollowMultiTitle(title)) return null;
-          return {
-            title,
-            due: normalizeDue(row.due, userText),
-            list_name: row.list_name != null ? String(row.list_name) : undefined,
-          };
-        })
-        .filter((x): x is NonNullable<typeof x> => x != null);
-      if (items.length) return { kind: "set_many", items };
-      return listActionFromUser(userText);
     }
     return {
       kind: "clarify",
@@ -567,6 +582,22 @@ export function tryDeterministicReminderIntent(text: string): ReminderAction | n
       kind: "clarify",
       message:
         "I can't delete reminders yet — only create, list, and check them off. Remove the extras in the Reminders app, or say e.g. check off complete OA.",
+    };
+  }
+
+  // Bulk-complete isn't supported (complete_reminder only matches one title at
+  // a time) — catch this deterministically rather than let it get routed to
+  // "list" (wrong) or fall through to the general chat agent (which has no
+  // reminders tools at all and would just fabricate a fake "done!").
+  if (
+    /\b(?:check\s*off|complete|mark|finish)(?:ed|ing)?\b/i.test(t) &&
+    /\b(?:all|every|everything)\b/i.test(t) &&
+    /\breminders?\b/i.test(t)
+  ) {
+    return {
+      kind: "clarify",
+      message:
+        "I can only check off one reminder at a time right now — name the specific one, e.g. \"check off call my mom\".",
     };
   }
 

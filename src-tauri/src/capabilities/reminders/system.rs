@@ -196,63 +196,71 @@ pub fn create_reminder(
     Err("reminders are only supported on macOS".into())
 }
 
+/// Fetch + filter, shared by the human-readable `list_reminders` and the
+/// structured `list_reminders_structured` (which needs each item's stable
+/// `identifier`, not just its title, for the "tap the one you meant"
+/// personalization picker — see `commands.rs`).
+#[cfg(target_os = "macos")]
+fn fetch_matching_items(
+    mgr: &eventkit::RemindersManager,
+    query: &ListQuery,
+) -> Result<Vec<eventkit::ReminderItem>, String> {
+    let cal_titles: Option<Vec<String>> = query.list_name.as_ref().map(|s| vec![s.clone()]);
+    let cal_refs: Option<Vec<&str>> = cal_titles
+        .as_ref()
+        .map(|v| v.iter().map(|s| s.as_str()).collect());
+    let cal_slice = cal_refs.as_ref().map(|v| v.as_slice());
+
+    let mut items = if query.include_completed {
+        mgr.fetch_reminders(cal_slice).map_err(map_ek_err)?
+    } else if query.window_start.is_some() || query.window_end.is_some() {
+        let start = query.window_start.map(ord_to_local_midnight).transpose()?;
+        let end = query.window_end.map(ord_to_local_midnight).transpose()?;
+        let mut dated = mgr
+            .fetch_incomplete_reminders_in_due_range(start, end, cal_slice)
+            .map_err(map_ek_err)?;
+        if query.include_undated {
+            let undated: Vec<_> = mgr
+                .fetch_incomplete_reminders()
+                .map_err(map_ek_err)?
+                .into_iter()
+                .filter(|r| r.due_date.is_none())
+                .filter(|r| calendar_matches(r, query.list_name.as_deref()))
+                .collect();
+            dated.extend(undated);
+        }
+        dated
+    } else {
+        mgr.fetch_incomplete_reminders().map_err(map_ek_err)?
+    };
+
+    if let Some(ref list) = query.list_name {
+        items.retain(|r| calendar_matches(r, Some(list.as_str())));
+    }
+
+    let search = query.search.as_ref().map(|s| s.to_ascii_lowercase());
+
+    let mut matched: Vec<_> = items
+        .into_iter()
+        .filter(|item| {
+            if let Some(ref q) = search {
+                if !item.title.to_ascii_lowercase().contains(q) {
+                    return false;
+                }
+            }
+            matches_window_item(item, query)
+        })
+        .collect();
+
+    matched.truncate(query.limit as usize);
+    Ok(matched)
+}
+
 #[cfg(target_os = "macos")]
 pub fn list_reminders(query: &ListQuery) -> Result<String, String> {
     let eventkit_result = with_reminders(|mgr| {
         mgr.ensure_authorized().map_err(map_ek_err)?;
-
-        let cal_titles: Option<Vec<String>> =
-            query.list_name.as_ref().map(|s| vec![s.clone()]);
-        let cal_refs: Option<Vec<&str>> = cal_titles
-            .as_ref()
-            .map(|v| v.iter().map(|s| s.as_str()).collect());
-        let cal_slice = cal_refs.as_ref().map(|v| v.as_slice());
-
-        let mut items = if query.include_completed {
-            mgr.fetch_reminders(cal_slice).map_err(map_ek_err)?
-        } else if query.window_start.is_some() || query.window_end.is_some() {
-            let start = query
-                .window_start
-                .map(ord_to_local_midnight)
-                .transpose()?;
-            let end = query.window_end.map(ord_to_local_midnight).transpose()?;
-            let mut dated = mgr
-                .fetch_incomplete_reminders_in_due_range(start, end, cal_slice)
-                .map_err(map_ek_err)?;
-            if query.include_undated {
-                let undated: Vec<_> = mgr
-                    .fetch_incomplete_reminders()
-                    .map_err(map_ek_err)?
-                    .into_iter()
-                    .filter(|r| r.due_date.is_none())
-                    .filter(|r| calendar_matches(r, query.list_name.as_deref()))
-                    .collect();
-                dated.extend(undated);
-            }
-            dated
-        } else {
-            mgr.fetch_incomplete_reminders().map_err(map_ek_err)?
-        };
-
-        if let Some(ref list) = query.list_name {
-            items.retain(|r| calendar_matches(r, Some(list.as_str())));
-        }
-
-        let search = query.search.as_ref().map(|s| s.to_ascii_lowercase());
-
-        let mut matched: Vec<_> = items
-            .into_iter()
-            .filter(|item| {
-                if let Some(ref q) = search {
-                    if !item.title.to_ascii_lowercase().contains(q) {
-                        return false;
-                    }
-                }
-                matches_window_item(item, query)
-            })
-            .collect();
-
-        matched.truncate(query.limit as usize);
+        let matched = fetch_matching_items(mgr, query)?;
 
         if matched.is_empty() {
             return Ok(empty_message(query));
@@ -287,11 +295,48 @@ pub fn list_reminders(_query: &ListQuery) -> Result<String, String> {
     Err("reminders are only supported on macOS".into())
 }
 
+/// One reminder, serializable, carrying its stable EventKit `identifier` —
+/// used by the personalization picker to complete-by-ID instead of
+/// re-matching by title (which is exactly the ambiguity bug fixed for the
+/// chat path in `complete_reminder`). No AppleScript fallback: identifiers
+/// are an EventKit-only concept, so this errors out instead of silently
+/// degrading to a title-only picker that could reintroduce that bug.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ReminderSummary {
+    pub id: String,
+    pub title: String,
+    pub due: Option<String>,
+    pub completed: bool,
+}
+
+#[cfg(target_os = "macos")]
+pub fn list_reminders_structured(query: &ListQuery) -> Result<Vec<ReminderSummary>, String> {
+    with_reminders(|mgr| {
+        mgr.ensure_authorized().map_err(map_ek_err)?;
+        let matched = fetch_matching_items(mgr, query)?;
+        Ok(matched
+            .into_iter()
+            .map(|item| ReminderSummary {
+                id: item.identifier,
+                title: item.title,
+                due: item.due_date.map(|d| d.format("%Y-%m-%d %H:%M").to_string()),
+                completed: item.completed,
+            })
+            .collect())
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn list_reminders_structured(_query: &ListQuery) -> Result<Vec<ReminderSummary>, String> {
+    Err("reminders are only supported on macOS".into())
+}
+
 #[cfg(target_os = "macos")]
 pub fn complete_reminder(
     title: &str,
     match_mode: &str,
     list_name: Option<&str>,
+    due_date: Option<&str>,
 ) -> Result<String, String> {
     let title = title.trim();
     if title.is_empty() {
@@ -308,27 +353,76 @@ pub fn complete_reminder(
         }
     };
 
+    // Multiple reminders can legitimately share a title (e.g. a daily "sleep"
+    // reminder created for several days) — title alone can't tell them apart.
+    let wanted_date = match due_date.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(raw) => Some(parse_ymd(raw)?),
+        None => None,
+    };
+
     with_reminders(|mgr| {
         mgr.ensure_authorized().map_err(map_ek_err)?;
 
         let items = mgr.fetch_incomplete_reminders().map_err(map_ek_err)?;
 
         let needle = title.to_ascii_lowercase();
-        let found = items.into_iter().find(|item| {
-            if !calendar_matches(item, list_name) {
-                return false;
-            }
-            let hay = item.title.to_ascii_lowercase();
-            if mode == "exact" {
-                hay == needle
-            } else {
-                hay.contains(&needle)
-            }
-        });
+        let mut matches: Vec<_> = items
+            .into_iter()
+            .filter(|item| {
+                if !calendar_matches(item, list_name) {
+                    return false;
+                }
+                let hay = item.title.to_ascii_lowercase();
+                if mode == "exact" {
+                    hay == needle
+                } else {
+                    hay.contains(&needle)
+                }
+            })
+            .collect();
 
-        let Some(item) = found else {
+        if matches.is_empty() {
             return Err(format!(
                 "There is no incomplete reminder matching \"{title}\"."
+            ));
+        }
+
+        let due_options = |matches: &[eventkit::ReminderItem]| {
+            matches
+                .iter()
+                .map(|item| {
+                    item.due_date
+                        .map(|dt| dt.format("%Y-%m-%d %H:%M").to_string())
+                        .unwrap_or_else(|| "no due date".to_string())
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+
+        let item = if matches.len() == 1 {
+            matches.remove(0)
+        } else if let Some((y, m, d)) = wanted_date {
+            let idx = matches.iter().position(|item| {
+                item.due_date.is_some_and(|dt| {
+                    let nd = dt.date_naive();
+                    nd.year() as u32 == y && nd.month() == m && nd.day() == d
+                })
+            });
+            match idx {
+                Some(i) => matches.remove(i),
+                None => {
+                    return Err(format!(
+                        "Found {} reminders matching \"{title}\" but none due on {y:04}-{m:02}-{d:02}. Due dates I have: {}.",
+                        matches.len(),
+                        due_options(&matches)
+                    ));
+                }
+            }
+        } else {
+            return Err(format!(
+                "Found {} reminders matching \"{title}\" — which one? Due dates: {}.",
+                matches.len(),
+                due_options(&matches)
             ));
         };
 
@@ -351,7 +445,30 @@ pub fn complete_reminder(
     _title: &str,
     _match_mode: &str,
     _list_name: Option<&str>,
+    _due_date: Option<&str>,
 ) -> Result<String, String> {
+    Err("reminders are only supported on macOS".into())
+}
+
+/// Complete a reminder by its exact EventKit identifier — no title or date
+/// matching, so no ambiguity possible. Used by the personalization picker,
+/// which already has the identifier from `list_reminders_structured`.
+#[cfg(target_os = "macos")]
+pub fn complete_reminder_by_id(id: &str) -> Result<String, String> {
+    let id = id.trim();
+    if id.is_empty() {
+        return Err("id must not be empty".into());
+    }
+
+    with_reminders(|mgr| {
+        mgr.ensure_authorized().map_err(map_ek_err)?;
+        let done = mgr.complete_reminder(id).map_err(map_ek_err)?;
+        Ok(format!("Completed reminder \"{}\"", done.title))
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn complete_reminder_by_id(_id: &str) -> Result<String, String> {
     Err("reminders are only supported on macOS".into())
 }
 

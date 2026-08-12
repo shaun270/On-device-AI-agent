@@ -25,12 +25,13 @@ pub async fn generate<'a>(
     agent_name: &str,
     custom_system: Option<String>,
     max_tokens: Option<usize>,
+    current_date: &str,
 ) -> Result<String, String> {
     wait_until_ready(state).await?;
 
     let engine = state.llm.lock().map_err(|_| "Failed to lock engine".to_string())?;
     if let Some(llm) = &*engine {
-        llm.generate(prompt_or_history, agent_name, custom_system, max_tokens)
+        llm.generate(prompt_or_history, agent_name, custom_system, max_tokens, current_date)
     } else {
         Err("LLM failed to initialize. Please check the terminal logs.".to_string())
     }

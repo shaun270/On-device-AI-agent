@@ -17,6 +17,7 @@ interface Props {
   agentName: string;
   onDeleteMessage: (id: string) => void;
   onClearHistory: () => void;
+  onCorrectionExecuted: (resultText: string) => void;
 }
 
 export function ChatLog({
@@ -25,6 +26,7 @@ export function ChatLog({
   agentName,
   onDeleteMessage,
   onClearHistory,
+  onCorrectionExecuted,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -63,7 +65,12 @@ export function ChatLog({
 
       {/* Message list */}
       {messages.map((msg) => (
-        <MessageBubble key={msg.id} message={msg} onDelete={onDeleteMessage} />
+        <MessageBubble
+          key={msg.id}
+          message={msg}
+          onDelete={onDeleteMessage}
+          onCorrectionExecuted={onCorrectionExecuted}
+        />
       ))}
 
       {/* Typing indicator */}

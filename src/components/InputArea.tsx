@@ -10,6 +10,7 @@
  */
 
 import { useRef, useEffect, type KeyboardEvent } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AppStatus } from "../types";
 
 interface Props {
@@ -31,6 +32,27 @@ export function InputArea({ value, status: _status, toolStatus, agentName, onCha
     el.style.height = "auto";
     el.style.height = Math.min(el.scrollHeight, 100) + "px";
   }, [value]);
+
+  // `autoFocus` below only fires once, on first mount. But the window gets
+  // re-focused many times after that (global hotkey, dock icon, Cmd+Tab) —
+  // window-level OS focus is not the same as this textarea having DOM
+  // focus, so without this the first click after re-focusing the window
+  // just wakes the window up instead of landing on the input. Re-focus the
+  // textarea every time the OS actually hands focus back to the window.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+
+    getCurrentWindow()
+      .onFocusChanged(({ payload: focused }) => {
+        if (focused) textareaRef.current?.focus();
+      })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(console.error);
+
+    return () => unlisten?.();
+  }, []);
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {

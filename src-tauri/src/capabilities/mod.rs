@@ -2,25 +2,49 @@
 //!
 //! To add a new feature (alarms, music, files, …):
 //! 1. Create `capabilities/<name>/` with the same shape as `reminders/`
-//!    (tools + `commands.rs` + optional `router.rs` + `system.rs`)
+//!    (tools + `commands.rs` + `exemplars.toml`/`exemplars.rs` +
+//!    `prompts/` + optional `router.rs` + `system.rs`)
 //! 2. Add `pub mod <name>;` here
 //! 3. Append that module's tools in `all_tools()`
-//! 4. Register that module's Tauri commands in `lib.rs` (one line each)
+//! 4. Append that module's exemplars in `all_domain_exemplars()`
+//! 5. Register that module's Tauri commands in `lib.rs` (one line each)
 //!
 //! Do not put feature prompts or OS logic in `lib.rs` or `llm.rs`.
 
+pub mod files;
 pub mod reminders;
 
+use crate::router::build::DomainExemplars;
 use crate::shared::Tool;
 
 /// Every tool across all capabilities (agent registers this list with Claude).
 pub fn all_tools() -> Vec<Box<dyn Tool>> {
     let mut tools = Vec::new();
     tools.extend(reminders::tools());
+    tools.extend(files::tools());
     // tools.extend(alarms::tools());
     // tools.extend(music::tools());
-    // tools.extend(files::tools());
     tools
+}
+
+/// Every capability's router exemplars, fed into `router::build::build_router`.
+pub fn all_domain_exemplars() -> Result<Vec<DomainExemplars>, String> {
+    Ok(vec![
+        reminders::exemplars::load()?,
+        files::exemplars::load()?,
+        // alarms::exemplars::load()?,
+        // music::exemplars::load()?,
+    ])
+}
+
+/// Same as `all_domain_exemplars`, plus any user-taught corrections merged
+/// in from `~/.martha/router_exemplars.jsonl`. This is what should actually
+/// feed `build_router` — at startup (`lib.rs`) and whenever a correction
+/// triggers a live router rebuild (`commands/route.rs`).
+pub fn all_domain_exemplars_personalized() -> Result<Vec<DomainExemplars>, String> {
+    let mut domains = all_domain_exemplars()?;
+    crate::router::personalization::merge_corrections_into(&mut domains);
+    Ok(domains)
 }
 
 /// Anthropic-style tool definitions for the agent core.

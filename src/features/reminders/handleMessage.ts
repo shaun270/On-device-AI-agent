@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-import { resolveReminderIntent, type ReminderAction } from "./reminderIntent";
+import { tryDeterministicReminderIntent, type ReminderAction } from "./reminderIntent";
 
 export async function runReminderAction(action: ReminderAction): Promise<string> {
   if (action.kind === "clarify") return action.message;
@@ -18,6 +18,7 @@ export async function runReminderAction(action: ReminderAction): Promise<string>
     return invoke<string>("complete_reminder", {
       title: action.title,
       match_mode: action.match_mode,
+      due: action.due ?? null,
     });
   }
   if (action.kind === "set_many") {
@@ -52,10 +53,11 @@ export function peekReminderEarlyClarify(trimmed: string): string | null {
 }
 
 /**
- * Slash commands + NL reminder routing.
- * Returns a reply, or null when the message should go to chat.
+ * Slash commands + zero-LLM deterministic reminders shortcuts — no router
+ * or LLM call happens here. Returns a reply, or null when the caller
+ * should try the cross-capability router next (see `src/router.ts`).
  */
-export async function tryHandleReminderMessage(trimmed: string): Promise<string | null> {
+export async function tryReminderFastPath(trimmed: string): Promise<string | null> {
   const early = peekReminderEarlyClarify(trimmed);
   if (early) return early;
 
@@ -100,7 +102,7 @@ export async function tryHandleReminderMessage(trimmed: string): Promise<string 
     });
   }
 
-  const nl = await resolveReminderIntent(trimmed);
-  if (nl) return runReminderAction(nl);
+  const det = tryDeterministicReminderIntent(trimmed);
+  if (det) return runReminderAction(det);
   return null;
 }
